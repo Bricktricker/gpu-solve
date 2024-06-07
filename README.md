@@ -1,2 +1,1 @@
-# gpu-solve
-Masterarbeit
+# GPU Solve
