@@ -1,21 +1,15 @@
 #pragma once
 #include "gridParams.h"
+#include "Vector3.h"
 #include <vector>
 
 class CpuGridData final : public GridParams {
 public:
 
     struct LevelData {
-        std::vector<double> v; // left side, target
-        std::vector<double> f; // right hand side
-
+        Vector3 v; // left side, target
+        Vector3 f; // right hand side
         std::array<std::size_t, 3> levelDim;
-
-        double getF(std::size_t x, std::size_t y, std::size_t z) const;
-        void setF(std::size_t x, std::size_t y, std::size_t z, double val);
-
-        double getV(std::size_t x, std::size_t y, std::size_t z) const;
-        void setV(std::size_t x, std::size_t y, std::size_t z, double val);
     };
 
     CpuGridData(const GridParams& grid);

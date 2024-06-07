@@ -1,6 +1,5 @@
 #include "CpuGridData.h"
 #include <math.h>
-#include <assert.h>
 
 // TODO: move them somewhere else
 namespace {
@@ -10,38 +9,6 @@ double f0(double x) {
 double f2(double x) {
 	return(100.0 * 4.0 * (x - 1.0) * (x - 1.0) * x * x * (14.0 * x * x - 14.0 * x + 3));
 }
-}
-
-void CpuGridData::LevelData::setF(std::size_t x, std::size_t y, std::size_t z, double val)
-{
-	const std::size_t idx = (z * levelDim[0] * levelDim[1]) + (y * levelDim[0]) + x;
-	assert(idx < f.size());
-	f[idx] = val;
-}
-
-double CpuGridData::LevelData::getF(std::size_t x, std::size_t y, std::size_t z) const
-{
-	const std::size_t idx = (z * levelDim[0] * levelDim[1]) + (y * levelDim[0]) + x;
-	assert(idx < f.size());
-	return f[idx];
-}
-
-double CpuGridData::LevelData::getV(std::size_t x, std::size_t y, std::size_t z) const
-{
-	std::size_t xMax = levelDim[0] + 2;
-	std::size_t yMax = levelDim[1] + 2;
-	const std::size_t idx = (z * xMax * yMax) + (y * xMax) + x;
-	assert(idx < v.size());
-	return v[idx];
-}
-
-void CpuGridData::LevelData::setV(std::size_t x, std::size_t y, std::size_t z, double val)
-{
-	std::size_t xMax = levelDim[0] + 2;
-	std::size_t yMax = levelDim[1] + 2;
-	const std::size_t idx = (z * xMax * yMax) + (y * xMax) + x;
-	assert(idx < v.size());
-	v[idx] = val;
 }
 
 CpuGridData::CpuGridData(const GridParams& grid)
@@ -69,8 +36,8 @@ CpuGridData::CpuGridData(const GridParams& grid)
 		const std::size_t numValuesLeft = (level.levelDim[0] + 2) * (level.levelDim[1] + 2) * (level.levelDim[2] + 2);
 		const std::size_t numValuesRight = level.levelDim[0] * level.levelDim[1] * level.levelDim[2];
 
-		level.v.resize(numValuesLeft);
-		level.f.resize(numValuesRight);
+		level.v = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
+		level.f = Vector3(level.levelDim[0], level.levelDim[1], level.levelDim[2]);
 	}
 
 	// fill right hand side for the first level
@@ -82,7 +49,7 @@ CpuGridData::CpuGridData(const GridParams& grid)
 				double z = k * h;
 
 				double val = -h * h * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
-				levels[0].setF(i, j, k, val); // TODO: change function or iteration order to not jump around in memory
+				levels[0].f.set(i, j, k, val); // TODO: change function or iteration order to not jump around in memory
 			}
 		}
 	}

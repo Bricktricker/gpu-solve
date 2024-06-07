@@ -8,7 +8,7 @@ public:
 
 private:
 	static double compResidual(const CpuGridData& grid, std::size_t level);
-	static std::vector<double> compResidualVec(const CpuGridData& grid, std::size_t level);
+	static Vector3 compResidualVec(const CpuGridData& grid, std::size_t level);
 
 	static double vcycle(const CpuGridData& grid);
 	static double jacobi(CpuGridData& grid, std::size_t level, std::size_t maxiter);
