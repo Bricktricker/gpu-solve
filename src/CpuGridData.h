@@ -23,6 +23,11 @@ public:
         return levels[level];
     }
 
+    std::size_t numLevels() const
+    {
+        return levels.size();
+    }
+
 private:
     std::vector<LevelData> levels; // levels[0] is the finest level and levels[-1] is the coarsed level
 };

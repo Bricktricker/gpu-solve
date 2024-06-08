@@ -10,6 +10,8 @@ private:
 	static double compResidual(const CpuGridData& grid, std::size_t level);
 	static Vector3 compResidualVec(const CpuGridData& grid, std::size_t level);
 
-	static double vcycle(const CpuGridData& grid);
+	static double vcycle(CpuGridData& grid);
 	static double jacobi(CpuGridData& grid, std::size_t level, std::size_t maxiter);
+	static void restrict(const Vector3& src, Vector3& dst);
+	static Vector3 interpolate(const Vector3& src);
 };

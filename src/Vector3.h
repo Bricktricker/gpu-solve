@@ -9,6 +9,9 @@ public:
 
 	void set(std::size_t x, std::size_t y, std::size_t z, double val);
 	double get(std::size_t x, std::size_t y, std::size_t z) const;
+	void fill(double val);
+
+	Vector3& operator+=(const Vector3& rhs);
 
 	std::size_t getXdim() const
 	{
@@ -21,6 +24,10 @@ public:
 	std::size_t getZdim() const
 	{
 		return dims[2];
+	}
+	std::size_t flatSize() const
+	{
+		return values.size();
 	}
 
 private:

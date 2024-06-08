@@ -22,3 +22,19 @@ double Vector3::get(std::size_t x, std::size_t y, std::size_t z) const
 	assert(idx < values.size());
 	return values[idx];
 }
+
+void Vector3::fill(double val)
+{
+	std::fill(values.begin(), values.end(), val);
+}
+
+Vector3& Vector3::operator+=(const Vector3& rhs)
+{
+	assert(flatSize() == rhs.flatSize());
+
+	for (size_t i = 0; i < flatSize(); i++) {
+		values[i] += rhs.values[i];
+	}
+	
+	return *this;
+}
