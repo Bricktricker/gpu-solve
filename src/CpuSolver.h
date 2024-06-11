@@ -14,4 +14,5 @@ private:
 	static double jacobi(CpuGridData& grid, std::size_t level, std::size_t maxiter);
 	static void restrict(const Vector3& src, Vector3& dst);
 	static Vector3 interpolate(const Vector3& src);
+	static void updateGhosts(Vector3& vec);
 };
