@@ -133,7 +133,7 @@ Stencil CpuGridData::computeStencil(const Stencil& prevStencil) const
 			for (std::size_t k = 0; k < ac.getZdim(); k++)
 				if (ac.get(i, j, k) != 0.0) {
 					finalStencil.values[cnt] = ac.get(i, j, k);
-					finalStencil.offsets[cnt] = std::make_tuple(i - 1, j - 1, k - 1);
+					finalStencil.offsets[cnt] = std::make_tuple(int(i - 1), int(j - 1), int(k - 1));
 					cnt++;
 				}
 
@@ -154,12 +154,12 @@ Stencil CpuGridData::computeStencil(const Stencil& prevStencil) const
 
 void CpuGridData::conv3(const Vector3& a, const Vector3& b, Vector3& c)
 {
-	int Aentriesx = (a.getXdim() - 1) / 2;
-	int Aentriesy = (a.getYdim() - 1) / 2;
-	int Aentriesz = (a.getZdim() - 1) / 2;
-	int Bentriesx = (b.getXdim() - 1) / 2;
-	int Bentriesy = (b.getYdim() - 1) / 2;
-	int Bentriesz = (b.getZdim() - 1) / 2;
+	int Aentriesx = static_cast<int>((a.getXdim() - 1) / 2);
+	int Aentriesy = static_cast<int>((a.getYdim() - 1) / 2);
+	int Aentriesz = static_cast<int>((a.getZdim() - 1) / 2);
+	int Bentriesx = static_cast<int>((b.getXdim() - 1) / 2);
+	int Bentriesy = static_cast<int>((b.getYdim() - 1) / 2);
+	int Bentriesz = static_cast<int>((b.getZdim() - 1) / 2);
 
 	int Centriesx = Aentriesx + Bentriesx;
 	int Centriesy = Aentriesy + Bentriesy;
