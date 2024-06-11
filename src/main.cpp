@@ -32,8 +32,29 @@ int main(int argc, char* argv[]) {
         configFile >> gridParams.preSmoothing;
         configFile >> gridParams.postSmoothing;
         configFile >> gridParams.omega;
+
+        // read stencil        
+        gridParams.stencil.values.resize(7);
+        gridParams.stencil.offsets.resize(7);
+
         for (std::size_t i = 0; i < gridParams.stencil.values.size(); i++) {
             configFile >> gridParams.stencil.values[i];
+        }
+
+        for (std::size_t i = 0; i < gridParams.stencil.offsets.size(); i++) {
+            int val;
+            configFile >> val;
+            std::get<0>(gridParams.stencil.offsets[i]) = val;
+        }
+        for (std::size_t i = 0; i < gridParams.stencil.offsets.size(); i++) {
+            int val;
+            configFile >> val;
+            std::get<1>(gridParams.stencil.offsets[i]) = val;
+        }
+        for (std::size_t i = 0; i < gridParams.stencil.offsets.size(); i++) {
+            int val;
+            configFile >> val;
+            std::get<2>(gridParams.stencil.offsets[i]) = val;
         }
 
         if (gridParams.periodic) {

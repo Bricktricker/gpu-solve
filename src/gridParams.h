@@ -1,12 +1,27 @@
 #pragma once
 #include <array>
+#include <vector>
+#include <assert.h>
 
-// TODO: convert to normal struct?
-union Stencil {
-    std::array<double, 7> values;
-    struct Names {
-        double center, left, right, top, bottom, front, back;
-    } names;
+struct Stencil {
+    std::vector<double> values;
+    std::vector<std::tuple<int, int, int>> offsets;
+
+    int getXOffset(std::size_t i) const
+    {
+        assert(i < offsets.size());
+        return std::get<0>(offsets[i]);
+    }
+    int getYOffset(std::size_t i) const
+    {
+        assert(i < offsets.size());
+        return std::get<1>(offsets[i]);
+    }
+    int getZOffset(std::size_t i) const
+    {
+        assert(i < offsets.size());
+        return std::get<2>(offsets[i]);
+    }
 };
 
 struct GridParams {

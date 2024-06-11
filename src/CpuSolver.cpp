@@ -27,15 +27,11 @@ double CpuSolver::compResidual(const CpuGridData& grid, std::size_t levelNum)
 		for (std::size_t y = 1; y < level.levelDim[1]+1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2]+1; z++) {
 				
-				// TODO: change order to reduce cache misses?
 				double stencilsum = 0.0;
-				stencilsum += grid.stencil.names.center * level.v.get(x, y, z);
-				stencilsum += grid.stencil.names.left * level.v.get(x-1, y, z);
-				stencilsum += grid.stencil.names.right * level.v.get(x + 1, y, z);
-				stencilsum += grid.stencil.names.bottom * level.v.get(x, y-1, z);
-				stencilsum += grid.stencil.names.top * level.v.get(x, y + 1, z);
-				stencilsum += grid.stencil.names.front * level.v.get(x, y, z-1);
-				stencilsum += grid.stencil.names.back * level.v.get(x, y, z + 1);
+				for (std::size_t i = 0; i < level.stencil.values.size(); i++) {
+					double vVal = level.v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
+					stencilsum += level.stencil.values[i] * vVal;
+				}
 
 				double r = level.f.get(x, y, z) - stencilsum;
 				res += r * r;
@@ -57,15 +53,11 @@ Vector3 CpuSolver::compResidualVec(const CpuGridData& grid, std::size_t levelNum
 		for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
 
-				// TODO: change order to reduce cache misses?
 				double stencilsum = 0.0;
-				stencilsum += grid.stencil.names.center * level.v.get(x, y, z);
-				stencilsum += grid.stencil.names.left * level.v.get(x - 1, y, z);
-				stencilsum += grid.stencil.names.right * level.v.get(x + 1, y, z);
-				stencilsum += grid.stencil.names.bottom * level.v.get(x, y - 1, z);
-				stencilsum += grid.stencil.names.top * level.v.get(x, y + 1, z);
-				stencilsum += grid.stencil.names.front * level.v.get(x, y, z - 1);
-				stencilsum += grid.stencil.names.back * level.v.get(x, y, z + 1);
+				for (std::size_t i = 0; i < level.stencil.values.size(); i++) {
+					double vVal = level.v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
+					stencilsum += level.stencil.values[i] * vVal;
+				}
 
 				double rVal = level.f.get(x, y, z) - stencilsum;
 				r.set(x, y, z, rVal);
@@ -75,8 +67,6 @@ Vector3 CpuSolver::compResidualVec(const CpuGridData& grid, std::size_t levelNum
 	
 	return r;
 }
-
-
 
 double CpuSolver::vcycle(CpuGridData& grid)
 {
@@ -101,8 +91,6 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		if (grid.periodic) updateGhosts(nextLevel.f);
 
 		// valdiated nextLevel.f for level 0
-
-		int ferub = 0;
 	}
 	
 	// reached coarsed level, solve now
@@ -131,8 +119,8 @@ double CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t ma
 {
 	// Validated jacobi for level 0
 	
-	const double alpha = 1.0 / grid.stencil.names.center;
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
+	const double alpha = 1.0 / level.stencil.values[0]; // stencil center
 
 	for (std::size_t i = 0; i < maxiter; i++) {
 		if(grid.periodic) updateGhosts(level.v);

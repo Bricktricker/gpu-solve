@@ -10,6 +10,7 @@ public:
         Vector3 v; // left side, target
         Vector3 f; // right hand side
         std::array<std::size_t, 3> levelDim;
+        Stencil stencil;
     };
 
     CpuGridData(const GridParams& grid);
@@ -30,4 +31,7 @@ public:
 
 private:
     std::vector<LevelData> levels; // levels[0] is the finest level and levels[-1] is the coarsed level
+
+    Stencil computeStencil(const Stencil& prevStencil) const;
+    static void conv3(const Vector3& a, const Vector3& b, Vector3& c);
 };
