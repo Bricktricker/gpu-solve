@@ -11,14 +11,14 @@ Vector3::Vector3(std::size_t x, std::size_t y, std::size_t z)
 
 void Vector3::set(std::size_t x, std::size_t y, std::size_t z, double val)
 {
-	const std::size_t idx = (z * dims[0] * dims[1]) + (y * dims[0]) + x;
+	const std::size_t idx = z + y * dims[2] + x * dims[2] * dims[1];
 	assert(idx < values.size());
 	values[idx] = val;
 }
 
 double Vector3::get(std::size_t x, std::size_t y, std::size_t z) const
 {
-	const std::size_t idx = (z * dims[0] * dims[1]) + (y * dims[0]) + x;
+	const std::size_t idx = z + y * dims[2] + x * dims[2] * dims[1];
 	assert(idx < values.size());
 	return values[idx];
 }
