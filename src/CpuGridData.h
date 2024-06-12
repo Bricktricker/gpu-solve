@@ -33,5 +33,5 @@ private:
     std::vector<LevelData> levels; // levels[0] is the finest level and levels[-1] is the coarsed level
 
     Stencil computeStencil(const Stencil& prevStencil) const;
-    static void conv3(const Vector3& a, const Vector3& b, Vector3& c);
+    static Vector3 conv3(const Vector3& a, const Vector3& b);
 };

@@ -11,8 +11,6 @@ void CpuSolver::solve(CpuGridData& grid)
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
 		double res = vcycle(grid);
 		std::cout << "iter: " << i << " residual: " << res << '\n';
-
-		break; // break for now, until the first itteration works
 	}
 
 	int frzu = 0; // debug break point
@@ -71,45 +69,33 @@ Vector3 CpuSolver::compResidualVec(const CpuGridData& grid, std::size_t levelNum
 double CpuSolver::vcycle(CpuGridData& grid)
 {
 	for (std::size_t i = 0; i < grid.numLevels()-1; i++) {
-		double res = jacobi(grid, i, grid.preSmoothing);
-		std::cout << "jacobi(" << i << ")= " << res << "\n";
+		jacobi(grid, i, grid.preSmoothing);
 
 		// clear v for next level
 		CpuGridData::LevelData& nextLevel = grid.getLevel(i + 1);
 		nextLevel.v.fill(0.0);
-		std::cout << "v" << (i + 1) << " = 0 // clear old v\n";
 
 		// compute residual
 		Vector3 r = compResidualVec(grid, i);
 		if (grid.periodic) updateGhosts(r);
 
-		// validated r for level 0
-
 		// restrict residual to next level f
-		std::cout << "f" << (i + 1) << " = restrict(r" << i << ")\n";
 		restrict(r, nextLevel.f);
 		if (grid.periodic) updateGhosts(nextLevel.f);
-
-		// valdiated nextLevel.f for level 0
 	}
 	
 	// reached coarsed level, solve now
-	double topJac = jacobi(grid, grid.numLevels() - 1, grid.preSmoothing+grid.postSmoothing);
-	std::cout << "top jacobi(" << grid.numLevels() - 1 << ") = " << topJac << '\n';
+	jacobi(grid, grid.numLevels() - 1, grid.preSmoothing+grid.postSmoothing);
 
 	for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
 		// interpolate v to previos level e
-		std::cout << "e" << (i - 1) << " = interpolate(v" << i << ")\n";
-		Vector3 e = interpolate(grid.getLevel(i).v);
+		Vector3 e = interpolate(grid.getLevel(i).v, grid.periodic);
 
 		// v = v + e
-
-		std::cout << 'v' << i - 1 << " += e" << i - 1 << '\n';
 		Vector3& v = grid.getLevel(i - 1).v;
 		v += e;
 
-		double bottomJac = jacobi(grid, i - 1, grid.postSmoothing);
-		std::cout << "jacobi(" << i - 1 << ") = " << bottomJac << '\n';
+		jacobi(grid, i - 1, grid.postSmoothing);
 	}
 
 	// returns current residual
@@ -117,9 +103,7 @@ double CpuSolver::vcycle(CpuGridData& grid)
 }
 
 double CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxiter)
-{
-	// Validated jacobi for level 0
-	
+{	
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 	const double alpha = 1.0 / level.stencil.values[0]; // stencil center
 
@@ -169,7 +153,7 @@ void CpuSolver::restrict(const Vector3& fine, Vector3& coarse)
 	}
 }
 
-Vector3 CpuSolver::interpolate(const Vector3& src)
+Vector3 CpuSolver::interpolate(const Vector3& src, bool periodic)
 {
 	std::size_t xDim = src.getXdim() - 2;
 	std::size_t yDim = src.getYdim() - 2;
@@ -195,8 +179,7 @@ Vector3 CpuSolver::interpolate(const Vector3& src)
 		}
 	}
 
-	// TODO: check for grid.periodic
-	if (true) {
+	if (periodic) {
 		updateGhosts(dst);
 	}
 
@@ -230,8 +213,7 @@ Vector3 CpuSolver::interpolate(const Vector3& src)
 		}
 	}
 
-	// TODO: check for grid.periodic
-	if (true) {
+	if (periodic) {
 		updateGhosts(dst);
 	}
 
@@ -250,7 +232,7 @@ void CpuSolver::updateGhosts(Vector3& vec)
 		}
 	}
 
-	// y - dimension
+	// y-dimension
 	for (std::size_t x = 0; x < vec.getXdim(); x++) {
 		for (std::size_t z = 0; z < vec.getZdim(); z++) {
 			vec.set(x, 0, z, vec.get(x, vec.getYdim()-2, z));
@@ -258,6 +240,7 @@ void CpuSolver::updateGhosts(Vector3& vec)
 		}
 	}
 
+	// x-dimension
 	for (std::size_t y = 0; y < vec.getYdim(); y++) {
 		for (std::size_t z = 0; z < vec.getZdim(); z++) {
 			vec.set(0, y, z, vec.get(vec.getXdim()-2, y, z));
