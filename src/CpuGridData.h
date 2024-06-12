@@ -9,6 +9,8 @@ public:
     struct LevelData {
         Vector3 v; // left side, target
         Vector3 f; // right hand side
+        Vector3 r; // latest residual
+        Vector3 e; // error
         std::array<std::size_t, 3> levelDim;
         Stencil stencil;
     };

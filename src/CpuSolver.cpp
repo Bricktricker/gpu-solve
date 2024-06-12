@@ -16,10 +16,10 @@ void CpuSolver::solve(CpuGridData& grid)
 	int frzu = 0; // debug break point
 }
 
-double CpuSolver::compResidual(const CpuGridData& grid, std::size_t levelNum)
+double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 {
 	double res = 0.0;
-	const CpuGridData::LevelData& level = grid.getLevel(levelNum);
+	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 
 	for (std::size_t x = 1; x < level.levelDim[0]+1; x++) {
 		for (std::size_t y = 1; y < level.levelDim[1]+1; y++) {
@@ -32,38 +32,13 @@ double CpuSolver::compResidual(const CpuGridData& grid, std::size_t levelNum)
 				}
 
 				double r = level.f.get(x, y, z) - stencilsum;
+				level.r.set(x, y, z, r);
 				res += r * r;
 			}
 		}
 	}
 	
 	return sqrt(res);
-}
-
-// like compResidual, but returns the vector r
-Vector3 CpuSolver::compResidualVec(const CpuGridData& grid, std::size_t levelNum)
-{
-	const CpuGridData::LevelData& level = grid.getLevel(levelNum);
-
-	Vector3 r(level.f.getXdim(), level.f.getYdim(), level.f.getZdim());
-
-	for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
-		for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
-			for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
-
-				double stencilsum = 0.0;
-				for (std::size_t i = 0; i < level.stencil.values.size(); i++) {
-					double vVal = level.v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
-					stencilsum += level.stencil.values[i] * vVal;
-				}
-
-				double rVal = level.f.get(x, y, z) - stencilsum;
-				r.set(x, y, z, rVal);
-			}
-		}
-	}
-	
-	return r;
 }
 
 double CpuSolver::vcycle(CpuGridData& grid)
@@ -76,7 +51,8 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		nextLevel.v.fill(0.0);
 
 		// compute residual
-		Vector3 r = compResidualVec(grid, i);
+		compResidual(grid, i);
+		Vector3& r = grid.getLevel(i).r;
 		if (grid.periodic) updateGhosts(r);
 
 		// restrict residual to next level f
@@ -89,11 +65,11 @@ double CpuSolver::vcycle(CpuGridData& grid)
 
 	for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
 		// interpolate v to previos level e
-		Vector3 e = interpolate(grid.getLevel(i).v, grid.periodic);
+		interpolate(grid, i - 1);
 
 		// v = v + e
-		Vector3& v = grid.getLevel(i - 1).v;
-		v += e;
+		auto& level = grid.getLevel(i - 1);
+		level.v += level.e;
 
 		jacobi(grid, i - 1, grid.postSmoothing);
 	}
@@ -110,12 +86,12 @@ double CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t ma
 	for (std::size_t i = 0; i < maxiter; i++) {
 		if(grid.periodic) updateGhosts(level.v);
 		
-		Vector3 r = compResidualVec(grid, levelNum);
+		compResidual(grid, levelNum);
 		
 		for (std::size_t x = 0; x < level.levelDim[0] + 2; x++) {
 			for (std::size_t y = 0; y < level.levelDim[1] + 2; y++) {
 				for (std::size_t z = 0; z < level.levelDim[2] + 2; z++) {
-					double newV = level.v.get(x, y, z) + grid.omega * (alpha * r.get(x, y, z));
+					double newV = level.v.get(x, y, z) + grid.omega * (alpha * level.r.get(x, y, z));
 					level.v.set(x, y, z, newV);
 				}
 			}
@@ -153,71 +129,58 @@ void CpuSolver::restrict(const Vector3& fine, Vector3& coarse)
 	}
 }
 
-Vector3 CpuSolver::interpolate(const Vector3& src, bool periodic)
+void CpuSolver::interpolate(CpuGridData& grid, std::size_t level)
 {
-	std::size_t xDim = src.getXdim() - 2;
-	std::size_t yDim = src.getYdim() - 2;
-	std::size_t zDim = src.getZdim() - 2;
-
-	xDim *= 2;
-	yDim *= 2;
-	zDim *= 2;
-
-	xDim += 2;
-	yDim += 2;
-	zDim += 2;
-
-	Vector3 dst(xDim, yDim, zDim);
+	const Vector3& coarse = grid.getLevel(level + 1).v;
+	Vector3& fine = grid.getLevel(level).e;
 
 	// prepare
-	for (std::size_t x = 0; x < dst.getXdim() - 1; x += 2) {
-		for (std::size_t y = 0; y < dst.getYdim() - 1; y += 2) {
-			for (std::size_t z = 0; z < dst.getZdim() - 1; z += 2) {
-				double val = src.get(x/2, y/2, z/2);
-				dst.set(x, y, z, val);
+	for (std::size_t x = 0; x < fine.getXdim() - 1; x += 2) {
+		for (std::size_t y = 0; y < fine.getYdim() - 1; y += 2) {
+			for (std::size_t z = 0; z < fine.getZdim() - 1; z += 2) {
+				double val = coarse.get(x/2, y/2, z/2);
+				fine.set(x, y, z, val);
 			}
 		}
 	}
 
-	if (periodic) {
-		updateGhosts(dst);
+	if (grid.periodic) {
+		updateGhosts(fine);
 	}
 
 	// Interpolate in x-direction
-	for (std::size_t x = 0; x+2 < dst.getXdim(); x += 2) {
-		for (std::size_t y = 0; y < dst.getYdim(); y += 2) {
-			for (std::size_t z = 0; z < dst.getZdim(); z += 2) {
-				double val = 0.5 * dst.get(x, y, z) + 0.5 * dst.get(x + 2, y, z);
-				dst.set(x+1, y, z, val);
+	for (std::size_t x = 0; x+2 < fine.getXdim(); x += 2) {
+		for (std::size_t y = 0; y < fine.getYdim(); y += 2) {
+			for (std::size_t z = 0; z < fine.getZdim(); z += 2) {
+				double val = 0.5 * fine.get(x, y, z) + 0.5 * fine.get(x + 2, y, z);
+				fine.set(x+1, y, z, val);
 			}
 		}
 	}
 
 	// Interpolate in y-direction
-	for (std::size_t x = 0; x < dst.getXdim(); x++) {
-		for (std::size_t y = 0; y + 2 < dst.getYdim(); y += 2) {
-			for (std::size_t z = 0; z < dst.getZdim(); z += 2) {
-				double val = 0.5 * dst.get(x, y, z) + 0.5 * dst.get(x, y+2, z);
-				dst.set(x, y+1, z, val);
+	for (std::size_t x = 0; x < fine.getXdim(); x++) {
+		for (std::size_t y = 0; y + 2 < fine.getYdim(); y += 2) {
+			for (std::size_t z = 0; z < fine.getZdim(); z += 2) {
+				double val = 0.5 * fine.get(x, y, z) + 0.5 * fine.get(x, y+2, z);
+				fine.set(x, y+1, z, val);
 			}
 		}
 	}
 
 	// Interpolate in z-direction
-	for (std::size_t x = 0; x < dst.getXdim(); x++) {
-		for (std::size_t y = 0; y < dst.getYdim(); y++) {
-			for (std::size_t z = 0; z + 2 < dst.getZdim(); z += 2) {
-				double val = 0.5 * dst.get(x, y, z) + 0.5 * dst.get(x, y, z + 2);
-				dst.set(x, y, z+1, val);
+	for (std::size_t x = 0; x < fine.getXdim(); x++) {
+		for (std::size_t y = 0; y < fine.getYdim(); y++) {
+			for (std::size_t z = 0; z + 2 < fine.getZdim(); z += 2) {
+				double val = 0.5 * fine.get(x, y, z) + 0.5 * fine.get(x, y, z + 2);
+				fine.set(x, y, z+1, val);
 			}
 		}
 	}
 
-	if (periodic) {
-		updateGhosts(dst);
+	if (grid.periodic) {
+		updateGhosts(fine);
 	}
-
-	return dst;
 }
 
 void CpuSolver::updateGhosts(Vector3& vec)

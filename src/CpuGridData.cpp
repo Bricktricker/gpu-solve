@@ -37,6 +37,10 @@ CpuGridData::CpuGridData(const GridParams& grid)
 
 		level.v = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
 		level.f = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
+		level.r = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
+		if (i + 1 != maxlevel) {
+			level.e = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
+		}
 	}
 
 	// fill right hand side for the first level
