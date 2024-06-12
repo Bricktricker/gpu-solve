@@ -94,8 +94,8 @@ double CpuSolver::vcycle(CpuGridData& grid)
 	}
 	
 	// reached coarsed level, solve now
-	std::cout << "jacobi(" << grid.numLevels() - 1 << ")\n";
-	jacobi(grid, grid.numLevels() - 1, grid.postSmoothing);
+	double topJac = jacobi(grid, grid.numLevels() - 1, grid.preSmoothing+grid.postSmoothing);
+	std::cout << "top jacobi(" << grid.numLevels() - 1 << ") = " << topJac << '\n';
 
 	for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
 		// interpolate v to previos level e
@@ -103,12 +103,13 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		Vector3 e = interpolate(grid.getLevel(i).v);
 
 		// v = v + e
+
 		std::cout << 'v' << i - 1 << " += e" << i - 1 << '\n';
 		Vector3& v = grid.getLevel(i - 1).v;
 		v += e;
 
-		std::cout << "jacobi(" << i - 1 << ")\n";
-		jacobi(grid, i - 1, grid.postSmoothing);
+		double bottomJac = jacobi(grid, i - 1, grid.postSmoothing);
+		std::cout << "jacobi(" << i - 1 << ") = " << bottomJac << '\n';
 	}
 
 	// returns current residual
@@ -184,26 +185,54 @@ Vector3 CpuSolver::interpolate(const Vector3& src)
 
 	Vector3 dst(xDim, yDim, zDim);
 
-	for (std::size_t x = 1; x < dst.getXdim()-1; x++) {
-		for (std::size_t y = 1; y < dst.getYdim()-1; y++) {
-			for (std::size_t z = 1; z < dst.getZdim()-1; z++) {
-				bool xEven = x % 2 == 0;
-				bool yEven = y % 2 == 0;
-				bool zEven = z % 2 == 0;
-
-				if (xEven && yEven && zEven) {
-					double val = src.get(x / 2, y / 2, z / 2);
-					dst.set(x, y, z, val);
-				}
-				else {
-					// TODO: correct interpolation? Maybe wrong when x is even
-					double xVal = src.get(x / 2, y / 2, z / 2) + src.get((x / 2) + 1, y / 2, z / 2);
-					double yVal = src.get(x / 2, y / 2, z / 2) + src.get(x/2, (y / 2) + 1, z / 2);
-					double zVal = src.get(x / 2, y / 2, z / 2) + src.get(x/2, y / 2, (z / 2) + 1);
-					dst.set(x, y, z, (xVal + yVal + zVal) / 6.0);
-				}
+	// prepare
+	for (std::size_t x = 0; x < dst.getXdim() - 1; x += 2) {
+		for (std::size_t y = 0; y < dst.getYdim() - 1; y += 2) {
+			for (std::size_t z = 0; z < dst.getZdim() - 1; z += 2) {
+				double val = src.get(x/2, y/2, z/2);
+				dst.set(x, y, z, val);
 			}
 		}
+	}
+
+	// TODO: check for grid.periodic
+	if (true) {
+		updateGhosts(dst);
+	}
+
+	// Interpolate in x-direction
+	for (std::size_t x = 0; x+2 < dst.getXdim(); x += 2) {
+		for (std::size_t y = 0; y < dst.getYdim(); y += 2) {
+			for (std::size_t z = 0; z < dst.getZdim(); z += 2) {
+				double val = 0.5 * dst.get(x, y, z) + 0.5 * dst.get(x + 2, y, z);
+				dst.set(x+1, y, z, val);
+			}
+		}
+	}
+
+	// Interpolate in y-direction
+	for (std::size_t x = 0; x < dst.getXdim(); x++) {
+		for (std::size_t y = 0; y + 2 < dst.getYdim(); y += 2) {
+			for (std::size_t z = 0; z < dst.getZdim(); z += 2) {
+				double val = 0.5 * dst.get(x, y, z) + 0.5 * dst.get(x, y+2, z);
+				dst.set(x, y+1, z, val);
+			}
+		}
+	}
+
+	// Interpolate in z-direction
+	for (std::size_t x = 0; x < dst.getXdim(); x++) {
+		for (std::size_t y = 0; y < dst.getYdim(); y++) {
+			for (std::size_t z = 0; z + 2 < dst.getZdim(); z += 2) {
+				double val = 0.5 * dst.get(x, y, z) + 0.5 * dst.get(x, y, z + 2);
+				dst.set(x, y, z+1, val);
+			}
+		}
+	}
+
+	// TODO: check for grid.periodic
+	if (true) {
+		updateGhosts(dst);
 	}
 
 	return dst;
