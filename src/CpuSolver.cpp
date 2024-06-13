@@ -1,6 +1,7 @@
 #include "CpuSolver.h"
 #include <assert.h>
 #include <iostream>
+#include <chrono>
 
 void CpuSolver::solve(CpuGridData& grid)
 {
@@ -8,12 +9,17 @@ void CpuSolver::solve(CpuGridData& grid)
 	// TODO: if(grid.periodic) { updateResidual(f & v) }, needed?
 	double initialResidual = compResidual(grid, 0);
 
+	auto start = std::chrono::high_resolution_clock::now();
+
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
 		double res = vcycle(grid);
-		std::cout << "iter: " << i << " residual: " << res << '\n';
-	}
 
-	int frzu = 0; // debug break point
+		const auto end = std::chrono::high_resolution_clock::now();
+		const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+		start = end;
+
+		std::cout << "iter: " << i << " residual: " << res << " took " << time << "ms\n";
+	}
 }
 
 double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
