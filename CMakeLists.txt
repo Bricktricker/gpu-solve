@@ -9,6 +9,11 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release")
 endif(NOT CMAKE_BUILD_TYPE)
 
+find_package(OpenCL REQUIRED)
+
+add_subdirectory(extern/sycl-gtx)
+message(STATUS "Include:" ${SYCL_GTX_INCLUDE_PATH})
+
 add_subdirectory(src)
 
 # Compiler warnings from https://github.com/cpp-best-practices/cmake_template/blob/main/cmake/CompilerWarnings.cmake

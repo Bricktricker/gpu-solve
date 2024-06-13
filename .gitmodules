@@ -1,0 +1,3 @@
+[submodule "extern/sycl-gtx"]
+	path = extern/sycl-gtx
+	url = https://github.com/ProGTX/sycl-gtx.git
