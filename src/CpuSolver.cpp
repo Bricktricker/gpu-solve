@@ -84,7 +84,7 @@ double CpuSolver::vcycle(CpuGridData& grid)
 	return compResidual(grid, 0);
 }
 
-double CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxiter)
+void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxiter)
 {	
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 	const double alpha = 1.0 / level.stencil.values[0]; // stencil center
@@ -105,7 +105,6 @@ double CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t ma
 	}
 
 	if (grid.periodic) updateGhosts(level.v);
-	return compResidual(grid, levelNum);
 }
 
 void CpuSolver::restrict(const Vector3& fine, Vector3& coarse)

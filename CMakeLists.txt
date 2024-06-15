@@ -12,7 +12,6 @@ endif(NOT CMAKE_BUILD_TYPE)
 find_package(OpenCL REQUIRED)
 
 add_subdirectory(extern/sycl-gtx)
-message(STATUS "Include:" ${SYCL_GTX_INCLUDE_PATH})
 
 add_subdirectory(src)
 
