@@ -4,6 +4,7 @@
 #include "gridParams.h"
 #include "CpuGridData.h"
 #include "CpuSolver.h"
+#include "SyclSolver.h"
 
 #define SYCL_SIMPLE_SWIZZLES
 #include <cl/sycl.hpp>
@@ -11,17 +12,6 @@
 using namespace cl::sycl;
 
 int main(int argc, char* argv[]) {
-
-    auto platforms = cl::sycl::platform::get_platforms();
-    std::cout << "Number of platforms: " << platforms.size() << '\n';
-    cl::sycl::platform P = platforms.at(0);
-
-    const auto devices = P.get_devices(cl::sycl::info::device_type::gpu);
-    cl::sycl::device D = devices[0];
-
-    std::cout << "Device name: " << D.get_info<cl::sycl::info::device::name>() << '\n';
-    std::cout << "Vendor: " << D.get_info<cl::sycl::info::device::vendor>() << '\n';
-    std::cout << "OpenCl version: " << D.get_info<cl::sycl::info::device::opencl_version>() << '\n';
 
     if (argc < 2) {
         std::cerr << "Missing config file. Usage program.exe path/to/config.conf";
@@ -83,10 +73,12 @@ int main(int argc, char* argv[]) {
     }
 
     // TODO: check for cpu or gpu implementation
+    
+    //CpuGridData cpuGridData(gridParams);
+    //CpuSolver::solve(cpuGridData);
 
-    CpuGridData cpuGridData(gridParams);
-
-    CpuSolver::solve(cpuGridData);
+    SyclGridData syclGridData(gridParams);
+    SyclSolver::solve(syclGridData);
 
     return 0;
 }
