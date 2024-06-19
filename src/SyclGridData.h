@@ -1,6 +1,6 @@
 #pragma once
 #include "gridParams.h"
-#include <cl/sycl.hpp>
+#include <CL/sycl.hpp>
 #include <vector>
 
 class SyclGridData final : public GridParams

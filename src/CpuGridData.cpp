@@ -1,5 +1,7 @@
 #include "CpuGridData.h"
 #include <math.h>
+#include <algorithm>
+#include <tuple>
 
 // TODO: move them somewhere else
 namespace {

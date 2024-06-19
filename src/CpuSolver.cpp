@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <iostream>
 #include <chrono>
+#include <math.h>
 
 void CpuSolver::solve(CpuGridData& grid)
 {

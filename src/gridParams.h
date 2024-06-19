@@ -2,6 +2,7 @@
 #include <array>
 #include <vector>
 #include <assert.h>
+#include <tuple>
 
 struct Stencil {
     std::vector<double> values;

@@ -32,7 +32,7 @@ Vector3& Vector3::operator+=(const Vector3& rhs)
 {
 	assert(flatSize() == rhs.flatSize());
 
-	for (size_t i = 0; i < flatSize(); i++) {
+	for (std::size_t i = 0; i < flatSize(); i++) {
 		values[i] += rhs.values[i];
 	}
 	

@@ -6,11 +6,6 @@
 #include "CpuSolver.h"
 #include "SyclSolver.h"
 
-#define SYCL_SIMPLE_SWIZZLES
-#include <cl/sycl.hpp>
-#include <SYCL/detail/debug.h>
-using namespace cl::sycl;
-
 int main(int argc, char* argv[]) {
 
     if (argc < 2) {
