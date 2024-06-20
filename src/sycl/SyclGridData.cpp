@@ -38,10 +38,10 @@ SyclGridData::SyclGridData(const GridParams& grid)
 		}
 
 		levels.push_back(LevelData{
-			cl::sycl::buffer<float, 3>(cl::sycl::range<3>(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2)),
-			cl::sycl::buffer<float, 3>(cl::sycl::range<3>(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2)),
-			cl::sycl::buffer<float, 3>(cl::sycl::range<3>(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2)),
-			cl::sycl::buffer<float, 3>(cl::sycl::range<3>(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2)),
+			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
+			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
+			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
+			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			levelDim
 		});
 
@@ -82,10 +82,10 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 
 	cgh.parallel_for<class init_f>(range, [=](cl::sycl::id<3> index) {
 		SYCL_IF(index[0] == 0 || index[1] == 0 || index[2] == 0) {
-			wAccessor[index] = 0;
+			wAccessor(index) = 0;
 		}
 		SYCL_ELSE_IF(index[0] == xRightSide || index[1] == yRightSide || index[2] == zRightSide) {
-			wAccessor[index] = 0;
+			wAccessor(index) = 0;
 		}
 		SYCL_ELSE
 		{
@@ -95,13 +95,13 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 
 			cl::sycl::float1 val = (- fh * fh) * (f2(x)* f0(y)* f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
 
-			wAccessor[index] = val - leftFac;
+			wAccessor(index) = val - leftFac;
 		}
 		SYCL_END;
 	});
 
 	// Init other buffers to 0
-	// TODO: Do I need to init all buffers? Can't I skip e?
+	// TODO: Do I need to init all buffers? Can't I skip e and r?
 	for (std::size_t i = 0; i < levels.size(); i++) {
 		auto& level = levels[i];
 		cl::sycl::range<3> bufferRange(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
@@ -109,7 +109,7 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 		if (i > 0) {
 			auto fAcc = level.f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 			cgh.parallel_for<class clear>(bufferRange, [=](cl::sycl::id<3> index) {
-				fAcc[index] = 0.f;
+				fAcc(index) = 0.f;
 			});
 		}
 
@@ -117,9 +117,9 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 		auto rAcc = level.r.get_access<cl::sycl::access::mode::discard_write>(cgh);
 		auto eAcc = level.e.get_access<cl::sycl::access::mode::discard_write>(cgh);
 		cgh.parallel_for<class clear>(bufferRange, [=](cl::sycl::id<3> index) {
-			vAcc[index] = 0.f;
-			rAcc[index] = 0.f;
-			eAcc[index] = 0.f;
+			vAcc(index) = 0.f;
+			rAcc(index) = 0.f;
+			eAcc(index) = 0.f;
 		});
 	}
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "../gridParams.h"
+#include "SyclBuffer.h"
 #include <CL/sycl.hpp>
 #include <vector>
 
@@ -8,10 +9,10 @@ class SyclGridData final : public GridParams
 public:
 
 	struct LevelData {
-		cl::sycl::buffer<float, 3> v;
-		cl::sycl::buffer<float, 3> f;
-		cl::sycl::buffer<float, 3> r;
-		cl::sycl::buffer<float, 3> e;
+		SyclBuffer v;
+		SyclBuffer f;
+		SyclBuffer r;
+		SyclBuffer e;
 		std::array<std::size_t, 3> levelDim;
 		// GpuStencil
 	};
