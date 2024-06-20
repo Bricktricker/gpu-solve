@@ -2,9 +2,9 @@
 #include <filesystem>
 #include <fstream>
 #include "gridParams.h"
-#include "CpuGridData.h"
-#include "CpuSolver.h"
-#include "SyclSolver.h"
+#include "cpu/CpuGridData.h"
+#include "cpu/CpuSolver.h"
+#include "sycl/SyclSolver.h"
 
 int main(int argc, char* argv[]) {
 

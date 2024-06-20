@@ -69,7 +69,7 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 		leftFac = static_cast<float>(sum / (levels[0].levelDim[0] * levels[0].levelDim[1] * levels[0].levelDim[2]));
 	}
 	
-	auto wAccessor = levels[0].f.get_access<cl::sycl::access::mode::write>(cgh);
+	auto wAccessor = levels[0].f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 	cl::sycl::range<3> range(levels[0].levelDim[0]+2, levels[0].levelDim[1]+2, levels[0].levelDim[2]+2);
 	float syclH = static_cast<float>(h);
 	float syclMh = static_cast<float>(-h);
@@ -93,11 +93,34 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 			cl::sycl::float1 y = index[1] * fh;
 			cl::sycl::float1 z = index[2] * fh;
 
-			cl::sycl::float1 val = -fh * fh * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
+			cl::sycl::float1 val = (- fh * fh) * (f2(x)* f0(y)* f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
 
 			wAccessor[index] = val - leftFac;
 		}
 		SYCL_END;
 	});
+
+	// Init other buffers to 0
+	// TODO: Do I need to init all buffers? Can't I skip e?
+	for (std::size_t i = 0; i < levels.size(); i++) {
+		auto& level = levels[i];
+		cl::sycl::range<3> bufferRange(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
+
+		if (i > 0) {
+			auto fAcc = level.f.get_access<cl::sycl::access::mode::discard_write>(cgh);
+			cgh.parallel_for<class clear>(bufferRange, [=](cl::sycl::id<3> index) {
+				fAcc[index] = 0.f;
+			});
+		}
+
+		auto vAcc = level.v.get_access<cl::sycl::access::mode::discard_write>(cgh);
+		auto rAcc = level.r.get_access<cl::sycl::access::mode::discard_write>(cgh);
+		auto eAcc = level.e.get_access<cl::sycl::access::mode::discard_write>(cgh);
+		cgh.parallel_for<class clear>(bufferRange, [=](cl::sycl::id<3> index) {
+			vAcc[index] = 0.f;
+			rAcc[index] = 0.f;
+			eAcc[index] = 0.f;
+		});
+	}
 
 }

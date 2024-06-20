@@ -1,5 +1,5 @@
 #pragma once
-#include "gridParams.h"
+#include "../gridParams.h"
 #include "Vector3.h"
 #include <vector>
 
