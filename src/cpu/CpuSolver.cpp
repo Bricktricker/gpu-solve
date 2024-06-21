@@ -9,6 +9,7 @@ void CpuSolver::solve(CpuGridData& grid)
 	// Compute inital residual
 	// TODO: if(grid.periodic) { updateResidual(f & v) }, needed?
 	double initialResidual = compResidual(grid, 0);
+	std::cout << "Inital residual: " << initialResidual << '\n';
 
 	auto start = std::chrono::high_resolution_clock::now();
 

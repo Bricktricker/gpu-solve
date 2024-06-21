@@ -61,6 +61,11 @@ public:
 		return acc[idx];
 	}
 
+	cl::sycl::detail::data_ref operator[](cl::sycl::detail::data_ref& idx) const
+	{
+		return acc[idx];
+	}
+
 private:
 	cl::sycl::accessor<float, 1, mode, target> acc;
 	std::array<std::size_t, 3> dims;
@@ -84,6 +89,12 @@ public:
 		return Sycl3dAccesor{ buffer.get_access<mode, target>(cgh), dims };
 	}
 
+	template<cl::sycl::access::mode mode>
+	cl::sycl::accessor<float, 1, mode, cl::sycl::access::target::host_buffer> get_host_access()
+	{
+		return buffer.get_access<mode, cl::sycl::access::target::host_buffer>();
+	}
+
 	std::size_t getXdim() const
 	{
 		return dims[0];
@@ -95,6 +106,20 @@ public:
 	std::size_t getZdim() const
 	{
 		return dims[2];
+	}
+	std::size_t flatSize() const
+	{
+		return dims[0] * dims[1] * dims[2];
+	}
+
+	cl::sycl::buffer<float, 1>& handle()
+	{
+		return buffer;
+	}
+
+	cl::sycl::range<3> getRange() const
+	{
+		return cl::sycl::range<3>(dims[0], dims[1], dims[2]);
 	}
 
 private:
