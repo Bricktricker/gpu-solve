@@ -20,25 +20,41 @@ void SyclSolver::solve(SyclGridData& grid)
             compResidual(cgh, grid, 0); // compute inital resiudal
         });
 
-        float res = sumResidual(queue, grid, 0);
-        std::cout << "Inital residual: " << res << '\n';
+        float resInital = sumResidual(queue, grid, 0);
+        std::cout << "Inital residual: " << resInital << '\n';
 
-        queue.submit([&](handler& cgh) {
-            jacobi(cgh, grid, 0, grid.preSmoothing);
-            compResidual(cgh, grid, 0);
-        });
-
-        res = sumResidual(queue, grid, 0);
-        std::cout << "residual after first jacobi: " << res << '\n';
+        float res = vcycle(queue, grid);
     }
     
 }
 
-void SyclSolver::vsycle(handler& cgh, SyclGridData& grid)
+float SyclSolver::vcycle(queue& queue, SyclGridData& grid)
 {
     for (std::size_t i = 0; i < grid.numLevels() - 1; i++) {
+
+        SyclGridData::LevelData& nextLevel = grid.getLevel(i + 1);
         
+        // TODO: move submit to outside of the loop
+        queue.submit([&](handler& cgh) {
+            jacobi(cgh, grid, i, grid.preSmoothing);
+
+            // clear v for next level
+            auto vAcc = nextLevel.v.get_access<access::mode::discard_write>(cgh);
+            cgh.parallel_for<class reset>(nextLevel.v.getRange(), [=](id<3> index) {
+                vAcc(index) = 0.0f;
+            });
+
+            compResidual(cgh, grid, i);
+
+            // restrict residual to next level f
+            restrict(cgh, grid.getLevel(i).r, nextLevel.f);
+        });
+
     }
+
+    float res = sumResidual(queue, grid, 0);
+    std::cout << "residual after first jacobi: " << res << '\n';
+    return res;
 }
 
 void SyclSolver::jacobi(handler& cgh, SyclGridData& grid, std::size_t levelNum, std::size_t maxiter)
@@ -166,4 +182,33 @@ float SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t leve
     }
 
     return sqrt(sum);
+}
+
+void SyclSolver::restrict(cl::sycl::handler& cgh, SyclBuffer& fine, SyclBuffer& coarse)
+{
+    range<3> range(coarse.getXdim()-2, coarse.getYdim() - 2, coarse.getZdim() - 2);
+
+    auto fineAcc = fine.get_access<access::mode::read>(cgh);
+    auto coraseAcc = coarse.get_access<access::mode::write>(cgh);
+
+    cgh.parallel_for<class rest>(range, [=](id<3> index) {
+        int1 xCenter = 2 * (index[0] + 1);
+        int1 yCenter = 2 * (index[1] + 1);
+        int1 zCenter = 2 * (index[2] + 1);
+
+        float1 coarseValue = 0.0f;
+
+        for (int ii = -2 + 1; ii < 2; ii++) {
+            for (int jj = -2 + 1; jj < 2; jj++) {
+                for (int kk = -2 + 1; kk < 2; kk++) {
+                    float fac = ((2.0f - abs(ii)) / 2.0f) * ((2.0f - abs(jj)) / 2.0f) * ((2.0f - abs(kk)) / 2.0f);
+                    coarseValue += fac * fineAcc(xCenter + ii, yCenter + jj, zCenter + kk);
+                }
+            }
+        }
+
+        int1 centerIdxCoarse = coraseAcc.shift1Index(index);
+        coraseAcc[centerIdxCoarse] = coarseValue;
+    });
+
 }
