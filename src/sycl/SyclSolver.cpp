@@ -15,17 +15,21 @@ void SyclSolver::solve(SyclGridData& grid)
     {
         queue queue(D);
         
-        // TODO: move everything into one submit?
         queue.submit([&](handler& cgh) {
             grid.initBuffers(cgh);
-        });
-
-        queue.submit([&](handler& cgh) {
-            compResidual(cgh, grid, 0);
+            compResidual(cgh, grid, 0); // compute inital resiudal
         });
 
         float res = sumResidual(queue, grid, 0);
         std::cout << "Inital residual: " << res << '\n';
+
+        queue.submit([&](handler& cgh) {
+            jacobi(cgh, grid, 0, grid.preSmoothing);
+            compResidual(cgh, grid, 0);
+        });
+
+        res = sumResidual(queue, grid, 0);
+        std::cout << "residual after first jacobi: " << res << '\n';
     }
     
 }
@@ -39,7 +43,21 @@ void SyclSolver::vsycle(handler& cgh, SyclGridData& grid)
 
 void SyclSolver::jacobi(handler& cgh, SyclGridData& grid, std::size_t levelNum, std::size_t maxiter)
 {
+    SyclGridData::LevelData& level = grid.getLevel(levelNum);
+    const float alpha = 1.0f / 6.f; // stencil center, TODO: Implement stencil
 
+    auto vAcc = level.v.get_access<access::mode::read_write>(cgh);
+    auto rAcc = level.r.get_access<access::mode::read>(cgh);
+
+    for (std::size_t i = 0; i < maxiter; i++) {
+        compResidual(cgh, grid, levelNum);
+
+        cgh.parallel_for<class jacobi>(level.v.getRange(), [=](id<3> index3) {
+            int1 idx = vAcc.getIndex(index3);
+            float1 newV = vAcc[idx] + grid.omega * alpha * rAcc[idx];
+            vAcc[idx] = newV;
+        });
+    }
 }
 
 void SyclSolver::compResidual(handler& cgh, SyclGridData& grid, std::size_t levelNum)
