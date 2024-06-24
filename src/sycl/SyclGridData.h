@@ -14,7 +14,7 @@ public:
 		SyclBuffer r;
 		SyclBuffer e;
 		std::array<std::size_t, 3> levelDim;
-		// GpuStencil
+		Stencil stencil;
 	};
 
 	SyclGridData(const GridParams& grid);

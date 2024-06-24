@@ -50,10 +50,13 @@ float SyclSolver::vcycle(queue& queue, SyclGridData& grid)
             restrict(cgh, grid.getLevel(i).r, nextLevel.f);
         });
 
+        float res = sumResidual(queue, grid, i);
+        std::cout << "residual after " << i << "'s jacobi: " << res << '\n';
+
     }
 
     float res = sumResidual(queue, grid, 0);
-    std::cout << "residual after first jacobi: " << res << '\n';
+    std::cout << "residual after vcycle jacobi: " << res << '\n';
     return res;
 }
 
@@ -89,13 +92,11 @@ void SyclSolver::compResidual(handler& cgh, SyclGridData& grid, std::size_t leve
     cgh.parallel_for<class res>(range, [=](id<3> index) {
         int1 centerIdx = vAcc.shift1Index(index);
 
-        float1 stencilsum = 6.0f * vAcc[centerIdx];
-        stencilsum += -1.f * vAcc.shift1(index[0] - 1, index[1], index[2]); // left
-        stencilsum += -1.f * vAcc.shift1(index[0] + 1, index[1], index[2]); // right
-        stencilsum += -1.f * vAcc.shift1(index[0], index[1] - 1, index[2]); // bottom
-        stencilsum += -1.f * vAcc.shift1(index[0], index[1] + 1, index[2]); // top
-        stencilsum += -1.f * vAcc.shift1(index[0], index[1], index[2] - 1); // front
-        stencilsum += -1.f * vAcc.shift1(index[0], index[1], index[2] + 1); // back
+        float1 stencilsum = 0.0f;
+        for (std::size_t i = 0; i < level.stencil.values.size(); i++) {
+            stencilsum += level.stencil.values[i] * 
+                vAcc.shift1(index[0] + level.stencil.getXOffset(i), index[1] + level.stencil.getYOffset(i), index[2] + level.stencil.getZOffset(i));
+        }
 
         rAcc[centerIdx] = fAcc[centerIdx] - stencilsum;
     });

@@ -23,6 +23,8 @@ struct Stencil {
         assert(i < offsets.size());
         return std::get<2>(offsets[i]);
     }
+
+    static Stencil fromPrevLevel(const Stencil& prevStencil);
 };
 
 struct GridParams {

@@ -59,7 +59,9 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		nextLevel.v.fill(0.0);
 
 		// compute residual
-		compResidual(grid, i);
+		double res = compResidual(grid, i);
+		std::cout << "residual after " << i << "'s jacobi: " << res << '\n';
+
 		Vector3& r = grid.getLevel(i).r;
 		if (grid.periodic) updateGhosts(r);
 
