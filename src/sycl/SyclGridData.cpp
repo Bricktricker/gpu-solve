@@ -53,7 +53,7 @@ SyclGridData::SyclGridData(const GridParams& grid)
 void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 {
 	// Compute right hand side sum, if we are periodic
-	float leftFac = 0.0f;
+	double leftFac = 0.0f;
 	if (this->periodic) {
 		double sum = 0.0;
 		for (int i = 0; i < levels[0].levelDim[0]; i++) {
@@ -68,19 +68,15 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 				}
 			}
 		}
-		leftFac = static_cast<float>(sum / (levels[0].levelDim[0] * levels[0].levelDim[1] * levels[0].levelDim[2]));
+		leftFac = sum / (levels[0].levelDim[0] * levels[0].levelDim[1] * levels[0].levelDim[2]);
 	}
 	
 	auto wAccessor = levels[0].f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 	cl::sycl::range<3> range(levels[0].levelDim[0]+2, levels[0].levelDim[1]+2, levels[0].levelDim[2]+2);
-	float syclH = static_cast<float>(h);
-	float syclMh = static_cast<float>(-h);
 
 	const auto xRightSide = levels[0].levelDim[0] + 1;
 	const auto yRightSide = levels[0].levelDim[1] + 1;
 	const auto zRightSide = levels[0].levelDim[2] + 1;
-
-	float fh = static_cast<float>(h);
 
 	cgh.parallel_for<class init_f>(range, [=](cl::sycl::id<3> index) {
 		SYCL_IF(index[0] == 0 || index[1] == 0 || index[2] == 0) {
@@ -91,13 +87,14 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 		}
 		SYCL_ELSE
 		{
-			cl::sycl::float1 x = index[0] * fh;
-			cl::sycl::float1 y = index[1] * fh;
-			cl::sycl::float1 z = index[2] * fh;
+			cl::sycl::double1 x = index[0] * h;
+			cl::sycl::double1 y = index[1] * h;
+			cl::sycl::double1 z = index[2] * h;
 
-			cl::sycl::float1 val = (- fh * fh) * (f2(x)* f0(y)* f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
+			cl::sycl::double1 val = (- h * h) * (f2(x)* f0(y)* f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
 
-			wAccessor(index) = val - leftFac;
+			assert(leftFac == 0.0);
+			wAccessor(index) = val; //-leftFac;
 		}
 		SYCL_END;
 	});
@@ -111,7 +108,7 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 		if (i > 0) {
 			auto fAcc = level.f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 			cgh.parallel_for<class clear>(bufferRange, [=](cl::sycl::id<3> index) {
-				fAcc(index) = 0.f;
+				fAcc(index) = 0.0;
 			});
 		}
 
@@ -119,9 +116,9 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 		auto rAcc = level.r.get_access<cl::sycl::access::mode::discard_write>(cgh);
 		auto eAcc = level.e.get_access<cl::sycl::access::mode::discard_write>(cgh);
 		cgh.parallel_for<class clear>(bufferRange, [=](cl::sycl::id<3> index) {
-			vAcc(index) = 0.f;
-			rAcc(index) = 0.f;
-			eAcc(index) = 0.f;
+			vAcc(index) = 0.0;
+			rAcc(index) = 0.0;
+			eAcc(index) = 0.0;
 		});
 	}
 

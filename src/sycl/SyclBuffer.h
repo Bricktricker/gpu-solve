@@ -9,7 +9,7 @@ class Sycl3dAccesor
 {
 	friend class SyclBuffer;
 protected:
-	Sycl3dAccesor(cl::sycl::accessor<float, 1, mode, target>& _acc, const std::array<std::size_t, 3>& _dims)
+	Sycl3dAccesor(cl::sycl::accessor<double, 1, mode, target>& _acc, const std::array<std::size_t, 3>& _dims)
 		: acc(_acc), dims(_dims)
 	{}
 
@@ -67,7 +67,7 @@ public:
 	}
 
 private:
-	cl::sycl::accessor<float, 1, mode, target> acc;
+	cl::sycl::accessor<double, 1, mode, target> acc;
 	std::array<std::size_t, 3> dims;
 };
 
@@ -89,12 +89,6 @@ public:
 		return Sycl3dAccesor{ buffer.get_access<mode, target>(cgh), dims };
 	}
 
-	template<cl::sycl::access::mode mode>
-	cl::sycl::accessor<float, 1, mode, cl::sycl::access::target::host_buffer> get_host_access()
-	{
-		return buffer.get_access<mode, cl::sycl::access::target::host_buffer>();
-	}
-
 	std::size_t getXdim() const
 	{
 		return dims[0];
@@ -112,7 +106,7 @@ public:
 		return dims[0] * dims[1] * dims[2];
 	}
 
-	cl::sycl::buffer<float, 1>& handle()
+	cl::sycl::buffer<double, 1>& handle()
 	{
 		return buffer;
 	}
@@ -123,6 +117,6 @@ public:
 	}
 
 private:
-	cl::sycl::buffer<float, 1> buffer;
+	cl::sycl::buffer<double, 1> buffer;
 	std::array<std::size_t, 3> dims;
 };

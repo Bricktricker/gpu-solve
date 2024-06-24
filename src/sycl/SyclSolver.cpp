@@ -3,6 +3,15 @@
 
 using namespace cl::sycl;
 
+// Used for debugging to read values on the host
+namespace {
+double getGpuVal(accessor<double, 1, access::mode::read, access::target::host_buffer>& acc, const SyclBuffer& buf, std::size_t x, std::size_t y, std::size_t z)
+{
+    const std::size_t idx1 = z * (buf.getYdim() * buf.getXdim()) + y * buf.getXdim() + x;
+    return acc[idx1];
+}
+}
+
 void SyclSolver::solve(SyclGridData& grid)
 {
     auto platforms = platform::get_platforms();
@@ -20,15 +29,15 @@ void SyclSolver::solve(SyclGridData& grid)
             compResidual(cgh, grid, 0); // compute inital resiudal
         });
 
-        float resInital = sumResidual(queue, grid, 0);
+        double resInital = sumResidual(queue, grid, 0);
         std::cout << "Inital residual: " << resInital << '\n';
 
-        float res = vcycle(queue, grid);
+        double res = vcycle(queue, grid);
     }
     
 }
 
-float SyclSolver::vcycle(queue& queue, SyclGridData& grid)
+double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
 {
     for (std::size_t i = 0; i < grid.numLevels() - 1; i++) {
 
@@ -50,12 +59,12 @@ float SyclSolver::vcycle(queue& queue, SyclGridData& grid)
             restrict(cgh, grid.getLevel(i).r, nextLevel.f);
         });
 
-        float res = sumResidual(queue, grid, i);
+        double res = sumResidual(queue, grid, i);
         std::cout << "residual after " << i << "'s jacobi: " << res << '\n';
 
     }
 
-    float res = sumResidual(queue, grid, 0);
+    double res = sumResidual(queue, grid, 0);
     std::cout << "residual after vcycle jacobi: " << res << '\n';
     return res;
 }
@@ -63,7 +72,7 @@ float SyclSolver::vcycle(queue& queue, SyclGridData& grid)
 void SyclSolver::jacobi(handler& cgh, SyclGridData& grid, std::size_t levelNum, std::size_t maxiter)
 {
     SyclGridData::LevelData& level = grid.getLevel(levelNum);
-    const float alpha = 1.0f / 6.f; // stencil center, TODO: Implement stencil
+    const double alpha = 1.0f / level.stencil.values[0]; // stencil center
 
     auto vAcc = level.v.get_access<access::mode::read_write>(cgh);
     auto rAcc = level.r.get_access<access::mode::read>(cgh);
@@ -102,7 +111,7 @@ void SyclSolver::compResidual(handler& cgh, SyclGridData& grid, std::size_t leve
     });
 }
 
-float SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t levelNum)
+double SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t levelNum)
 {
     // https://www.intel.com/content/www/us/en/docs/oneapi/optimization-guide-gpu/2023-0/reduction.html
     
@@ -138,7 +147,7 @@ float SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t leve
     }
 
 
-    buffer<float> accumBuf(num_work_items);
+    buffer<double> accumBuf(num_work_items);
 
     queue.submit([&](handler& cgh) {
         // write needed for initalization
@@ -146,14 +155,14 @@ float SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t leve
 
         // square residual first
         cgh.parallel_for<class sqare>(range<1>(level.r.flatSize()), [=](id<1> index) {
-            cl::sycl::float1 val = accR[index];
+            cl::sycl::double1 val = accR[index];
             accR[index] = val * val;
         });
 
         auto accumAcc = accumBuf.get_access<access::mode::discard_write>(cgh);
 
         cgh.parallel_for<class sum>(range<1>(num_work_items), [=](id<1> index) {
-            float1 sum = 0;
+            double1 sum = 0;
             SYCL_FOR(int1 i = index[0], i < flatSize, i) { // can't used i += num_work_items here, breaks kernel generation
                 // Don't use SYCL_IF, we can decide that while building the kernel
                 if (skipFirst) {
@@ -177,7 +186,7 @@ float SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t leve
     });
 
     auto accumAcc = accumBuf.get_access<access::mode::read, access::target::host_buffer>();
-    float sum = 0;
+    double sum = 0;
     for (int i = 0; i < num_work_items; i++) {
         sum += accumAcc[i];
     }
@@ -197,12 +206,12 @@ void SyclSolver::restrict(cl::sycl::handler& cgh, SyclBuffer& fine, SyclBuffer& 
         int1 yCenter = 2 * (index[1] + 1);
         int1 zCenter = 2 * (index[2] + 1);
 
-        float1 coarseValue = 0.0f;
+        double1 coarseValue = 0.0f;
 
         for (int ii = -2 + 1; ii < 2; ii++) {
             for (int jj = -2 + 1; jj < 2; jj++) {
                 for (int kk = -2 + 1; kk < 2; kk++) {
-                    float fac = ((2.0f - abs(ii)) / 2.0f) * ((2.0f - abs(jj)) / 2.0f) * ((2.0f - abs(kk)) / 2.0f);
+                    double fac = ((2.0 - abs(ii)) / 2.0) * ((2.0 - abs(jj)) / 2.0) * ((2.0 - abs(kk)) / 2.0);
                     coarseValue += fac * fineAcc(xCenter + ii, yCenter + jj, zCenter + kk);
                 }
             }
