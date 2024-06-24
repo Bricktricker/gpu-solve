@@ -21,7 +21,7 @@ public:
 	}
 
 	template<class point_ref_x, class point_ref_y, class point_ref_z>
-	cl::sycl::detail::data_ref operator()(point_ref_x x, point_ref_y y, point_ref_z z) const
+	cl::sycl::detail::data_ref operator()(point_ref_x& x, point_ref_y& y, point_ref_z& z) const
 	{
 		const cl::sycl::int1 idx1 = z * (dims[1] * dims[0]) + y * dims[0] + x;
 		return acc[idx1];
@@ -39,7 +39,7 @@ public:
 	}
 
 	template<class point_ref_x, class point_ref_y, class point_ref_z>
-	cl::sycl::detail::data_ref shift1(point_ref_x x, point_ref_y y, point_ref_z z) const
+	cl::sycl::detail::data_ref shift1(point_ref_x& x, point_ref_y& y, point_ref_z& z) const
 	{
 		const cl::sycl::int1 idx1 = (z + 1) * (dims[1] * dims[0]) + (y + 1) * dims[0] + (x + 1);
 		return acc[idx1];

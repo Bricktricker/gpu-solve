@@ -58,10 +58,27 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
             // restrict residual to next level f
             restrict(cgh, grid.getLevel(i).r, nextLevel.f);
         });
+    }
 
-        double res = sumResidual(queue, grid, i);
-        std::cout << "residual after " << i << "'s jacobi: " << res << '\n';
+    queue.submit([&](handler& cgh) {
+        jacobi(cgh, grid, grid.numLevels() - 1, grid.preSmoothing + grid.postSmoothing);
+    });
 
+    for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
+        // interpolate v to previos level e
+        queue.submit([&](handler& cgh) {
+
+            interpolate(cgh, grid.getLevel(i-1).e, grid.getLevel(i).v);
+        });
+
+        // v = v + e
+        /*
+        auto& level = grid.getLevel(i - 1);
+        level.v += level.e;
+
+        jacobi(grid, i - 1, grid.postSmoothing);
+        */
+        break;
     }
 
     double res = sumResidual(queue, grid, 0);
@@ -221,4 +238,46 @@ void SyclSolver::restrict(cl::sycl::handler& cgh, SyclBuffer& fine, SyclBuffer& 
         coraseAcc[centerIdxCoarse] = coarseValue;
     });
 
+}
+
+void SyclSolver::interpolate(cl::sycl::handler& cgh, SyclBuffer& fine, SyclBuffer& coarse)
+{
+    auto coarseAcc = coarse.get_access<access::mode::read>(cgh);
+    auto fineAcc = fine.get_access<access::mode::read_write>(cgh);
+
+    // prepare
+    range<3> rangePrep(fine.getXdim()/2, fine.getYdim()/2, fine.getZdim()/2);
+    cgh.parallel_for<class prep>(rangePrep, [=](id<3> index) {
+        int1 x = index[0] * 2;
+        int1 y = index[1] * 2;
+        int1 z = index[2] * 2;
+        fineAcc(x, y, z) = coarseAcc(index);
+    });
+
+    // Interpolate in x-direction
+    range<3> rangeX(fine.getXdim() / 2, fine.getYdim() / 2 + 1, fine.getZdim() / 2 + 1);
+    cgh.parallel_for<class InteX>(rangeX, [=](id<3> index) {
+        int1 x = index[0] * 2;
+        int1 y = index[1] * 2;
+        int1 z = index[2] * 2;
+        fineAcc(x + 1, y, z) = 0.5 * fineAcc(x, y, z) + 0.5 * fineAcc(x + 2, y, z);
+    });
+
+    // Interpolate in y-direction
+    range<3> rangeY(fine.getXdim(), fine.getYdim() / 2, fine.getZdim() / 2 + 1);
+    cgh.parallel_for<class InteY>(rangeY, [=](id<3> index) {
+        int1 x = index[0];
+        int1 y = index[1] * 2;
+        int1 z = index[2] * 2;
+        fineAcc(x, y + 1, z) = 0.5 * fineAcc(x, y, z) + 0.5 * fineAcc(x, y+2, z);
+    });
+
+    // Interpolate in z-direction
+    range<3> rangeZ(fine.getXdim(), fine.getYdim(), fine.getZdim() / 2);
+    cgh.parallel_for<class InteZ>(rangeZ, [=](id<3> index) {
+        int1 x = index[0];
+        int1 y = index[1];
+        int1 z = index[2] * 2;
+        fineAcc(x, y, z + 1) = 0.5 * fineAcc(x, y, z) + 0.5 * fineAcc(x, y, z + 2);
+    });
 }

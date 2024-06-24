@@ -11,4 +11,5 @@ private:
 	static void compResidual(cl::sycl::handler& cgh, SyclGridData& grid, std::size_t levelNum);
 	static double sumResidual(cl::sycl::queue& queue, SyclGridData& grid, std::size_t levelNum);
 	static void restrict(cl::sycl::handler& cgh, SyclBuffer& fine, SyclBuffer& coarse);
+	static void interpolate(cl::sycl::handler& cgh, SyclBuffer& fine, SyclBuffer& coarse);
 };
