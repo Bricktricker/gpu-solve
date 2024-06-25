@@ -1,5 +1,8 @@
 #include "SyclSolver.h"
 #include <iostream>
+#include <chrono>
+#include <string>
+#include <fstream>
 
 using namespace cl::sycl;
 
@@ -9,6 +12,26 @@ double getGpuVal(accessor<double, 1, access::mode::read, access::target::host_bu
 {
     const std::size_t idx1 = z * (buf.getYdim() * buf.getXdim()) + y * buf.getXdim() + x;
     return acc[idx1];
+}
+void dumpGpuBuf(SyclBuffer& buf, const std::string& file)
+{
+    auto acc = buf.handle().get_access<access::mode::read, access::target::host_buffer>();
+    std::ofstream out;
+    if (!file.empty()) {
+        out.open(file);
+    }
+
+    for (std::size_t x = 0; x < buf.getXdim(); x++) {
+        for (std::size_t y = 0; y < buf.getYdim(); y++) {
+            for (std::size_t z = 0; z < buf.getZdim(); z++) {
+                if (out) {
+                    out << "Index: " << x << ' ' << y << ' ' << z << " Value: " << getGpuVal(acc, buf, x, y, z) << '\n';
+                }else {
+                    std::cout << "Index: " << x << ' ' << y << ' ' << z << " Value: " << getGpuVal(acc, buf, x, y, z) << '\n';
+                }
+            }
+        }
+    }
 }
 }
 
@@ -26,13 +49,23 @@ void SyclSolver::solve(SyclGridData& grid)
         
         queue.submit([&](handler& cgh) {
             grid.initBuffers(cgh);
-            compResidual(cgh, grid, 0); // compute inital resiudal
         });
 
         double resInital = sumResidual(queue, grid, 0);
         std::cout << "Inital residual: " << resInital << '\n';
 
-        double res = vcycle(queue, grid);
+        auto start = std::chrono::high_resolution_clock::now();
+
+        for (std::size_t i = 0; i < grid.maxiter; i++) {
+            double res = vcycle(queue, grid);
+
+            const auto end = std::chrono::high_resolution_clock::now();
+            const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+            start = end;
+
+            std::cout << "iter: " << i << " residual: " << res << " took " << time << "ms\n";
+        }
+
     }
     
 }
@@ -58,6 +91,7 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
             // restrict residual to next level f
             restrict(cgh, grid.getLevel(i).r, nextLevel.f);
         });
+
     }
 
     queue.submit([&](handler& cgh) {
@@ -65,31 +99,32 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
     });
 
     for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
-        // interpolate v to previos level e
+        SyclGridData::LevelData& thisLevel = grid.getLevel(i);
+        SyclGridData::LevelData& prevLevel = grid.getLevel(i-1);
+
         queue.submit([&](handler& cgh) {
+            // interpolate v to previous level e
+            interpolate(cgh, prevLevel.e, thisLevel.v);
 
-            interpolate(cgh, grid.getLevel(i-1).e, grid.getLevel(i).v);
+            // v = v + e
+            auto vAcc = prevLevel.v.get_access<access::mode::read_write>(cgh);
+            auto eAcc = prevLevel.e.get_access<access::mode::read>(cgh);
+            cgh.parallel_for<class sum>(prevLevel.v.getRange(), [=](id<3> index) {
+                vAcc[index] += eAcc[index];
+            });
+
+            jacobi(cgh, grid, i-1, grid.postSmoothing);
         });
-
-        // v = v + e
-        /*
-        auto& level = grid.getLevel(i - 1);
-        level.v += level.e;
-
-        jacobi(grid, i - 1, grid.postSmoothing);
-        */
-        break;
     }
 
     double res = sumResidual(queue, grid, 0);
-    std::cout << "residual after vcycle jacobi: " << res << '\n';
     return res;
 }
 
 void SyclSolver::jacobi(handler& cgh, SyclGridData& grid, std::size_t levelNum, std::size_t maxiter)
 {
     SyclGridData::LevelData& level = grid.getLevel(levelNum);
-    const double alpha = 1.0f / level.stencil.values[0]; // stencil center
+    const double alpha = 1.0 / level.stencil.values[0]; // stencil center
 
     auto vAcc = level.v.get_access<access::mode::read_write>(cgh);
     auto rAcc = level.r.get_access<access::mode::read>(cgh);
@@ -167,6 +202,8 @@ double SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t lev
     buffer<double> accumBuf(num_work_items);
 
     queue.submit([&](handler& cgh) {
+        compResidual(cgh, grid, levelNum);
+
         // write needed for initalization
         auto accR = level.r.handle().get_access<access::mode::read_write>(cgh);
 

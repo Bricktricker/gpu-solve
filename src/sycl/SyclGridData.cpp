@@ -87,9 +87,9 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 		}
 		SYCL_ELSE
 		{
-			cl::sycl::double1 x = index[0] * h;
-			cl::sycl::double1 y = index[1] * h;
-			cl::sycl::double1 z = index[2] * h;
+			cl::sycl::double1 x = (index[0]-1) * h;
+			cl::sycl::double1 y = (index[1]-1) * h;
+			cl::sycl::double1 z = (index[2]-1) * h;
 
 			cl::sycl::double1 val = (- h * h) * (f2(x)* f0(y)* f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
 

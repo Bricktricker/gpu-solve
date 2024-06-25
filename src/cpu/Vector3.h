@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <array>
+#include <string>
 
 class Vector3 {
 public:
@@ -29,6 +30,8 @@ public:
 	{
 		return values.size();
 	}
+
+	void dump(const std::string& file) const;
 
 private:
 	std::vector<double> values;

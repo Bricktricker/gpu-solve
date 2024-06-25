@@ -1,5 +1,7 @@
 #include "Vector3.h"
 #include <assert.h>
+#include <iostream>
+#include <fstream>
 
 Vector3::Vector3(std::size_t x, std::size_t y, std::size_t z)
 {
@@ -37,4 +39,24 @@ Vector3& Vector3::operator+=(const Vector3& rhs)
 	}
 	
 	return *this;
+}
+
+void Vector3::dump(const std::string& file) const
+{
+	std::ofstream out;
+	if (!file.empty()) {
+		out.open(file);
+	}
+
+	for (std::size_t x = 0; x < getXdim(); x++) {
+		for (std::size_t y = 0; y < getYdim(); y++) {
+			for (std::size_t z = 0; z < getZdim(); z++) {
+				if (out) {
+					out << "Index: " << x << ' ' << y << ' ' << z << " Value: " << get(x, y, z) << '\n';
+				}else {
+					std::cout << "Index: " << x << ' ' << y << ' ' << z << " Value: " << get(x, y, z) << '\n';
+				}
+			}
+		}
+	}
 }
