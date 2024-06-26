@@ -43,9 +43,11 @@ void SyclSolver::solve(SyclGridData& grid)
 
     const auto devices = P.get_devices(info::device_type::gpu);
     device D = devices[0];
+
+    context C(D);
     
     {
-        queue queue(D);
+        queue queue(C, D);
         
         queue.submit([&](handler& cgh) {
             grid.initBuffers(cgh);
@@ -83,7 +85,7 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
             // clear v for next level
             auto vAcc = nextLevel.v.get_access<access::mode::discard_write>(cgh);
             cgh.parallel_for<class reset>(nextLevel.v.getRange(), [=](id<3> index) {
-                vAcc(index) = 0.0f;
+                vAcc(index) = 0.0;
             });
 
             compResidual(cgh, grid, i);
@@ -91,7 +93,6 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
             // restrict residual to next level f
             restrict(cgh, grid.getLevel(i).r, nextLevel.f);
         });
-
     }
 
     queue.submit([&](handler& cgh) {
@@ -134,7 +135,7 @@ void SyclSolver::jacobi(handler& cgh, SyclGridData& grid, std::size_t levelNum, 
 
         cgh.parallel_for<class jacobi>(level.v.getRange(), [=](id<3> index3) {
             int1 idx = vAcc.getIndex(index3);
-            float1 newV = vAcc[idx] + grid.omega * alpha * rAcc[idx];
+            double1 newV = vAcc[idx] + grid.omega * (alpha * rAcc[idx]);
             vAcc[idx] = newV;
         });
     }
@@ -151,14 +152,13 @@ void SyclSolver::compResidual(handler& cgh, SyclGridData& grid, std::size_t leve
     auto rAcc = level.r.get_access<access::mode::write>(cgh);
 
     cgh.parallel_for<class res>(range, [=](id<3> index) {
-        int1 centerIdx = vAcc.shift1Index(index);
-
-        float1 stencilsum = 0.0f;
+        double1 stencilsum = 0.0;
         for (std::size_t i = 0; i < level.stencil.values.size(); i++) {
-            stencilsum += level.stencil.values[i] * 
-                vAcc.shift1(index[0] + level.stencil.getXOffset(i), index[1] + level.stencil.getYOffset(i), index[2] + level.stencil.getZOffset(i));
+            double1 vVal = vAcc(index[0] + (level.stencil.getXOffset(i)+1), index[1] + (level.stencil.getYOffset(i)+1), index[2] + (level.stencil.getZOffset(i)+1));
+            stencilsum += level.stencil.values[i] * vVal;
         }
 
+        int1 centerIdx = vAcc.shift1Index(index);
         rAcc[centerIdx] = fAcc[centerIdx] - stencilsum;
     });
 }
@@ -171,14 +171,13 @@ double SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t lev
 
     std::size_t flatSize = level.r.flatSize();
 
-    std::size_t num_work_items;
+    std::size_t num_work_items = 1;
     bool skipFirst; // If the flat size is odd, we skip the first value in the buffer during the sum reduction, and copy it later into the accumulation buffer
     if (flatSize % 2 != 0) {
         assert(level.r.flatSize() % 2 != 0); // flat size is odd
         // Ignore the first element, so we get an even number of items in the buffer
         flatSize--;
 
-        num_work_items = 2;
         while (true) {
             std::size_t next = num_work_items * 2;
             if (flatSize % next != 0) {
@@ -260,7 +259,7 @@ void SyclSolver::restrict(cl::sycl::handler& cgh, SyclBuffer& fine, SyclBuffer& 
         int1 yCenter = 2 * (index[1] + 1);
         int1 zCenter = 2 * (index[2] + 1);
 
-        double1 coarseValue = 0.0f;
+        double1 coarseValue = 0.0;
 
         for (int ii = -2 + 1; ii < 2; ii++) {
             for (int jj = -2 + 1; jj < 2; jj++) {
