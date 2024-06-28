@@ -3,12 +3,12 @@
 // TODO: move them somewhere else
 namespace {
 	template<class Float>
-	Float f0(Float x) {
-		return Float(100 * x * (x - 1.0) * x * (x - 1.0) * x * (x - 1.0) * x * (x - 1.0));
+	Float f0(const Float& x) {
+		return (100 * x * (x - 1.0) * x * (x - 1.0) * x * (x - 1.0) * x * (x - 1.0));
 	}
 	template<class Float>
-	Float f2(Float x) {
-		return Float(100.0 * 4.0 * (x - 1.0) * (x - 1.0) * x * x * (14.0 * x * x - 14.0 * x + 3));
+	Float f2(const Float& x) {
+		return (100.0 * 4.0 * (x - 1.0) * (x - 1.0) * x * x * (14.0 * x * x - 14.0 * x + 3));
 	}
 }
 

@@ -5,6 +5,8 @@
 
 #include <cstdio>
 #include <sstream>
+#include <iomanip>
+#include <limits>
 
 #define SYCL_SWAP(member) swap(first.member, second.member)
 #define SYCL_MOVE_INIT(member) member(std::move(move.member))
@@ -182,7 +184,9 @@ struct base_host_data {
 template <typename T>
 struct get_string {
   static string_class get(const T& t) {
+    constexpr auto max_precision{std::numeric_limits<double>::digits10 + 1};
     std::stringstream s;
+    s << std::setprecision(max_precision);
     s << t;
     return s.str();
   }

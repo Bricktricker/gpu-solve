@@ -9,7 +9,7 @@ class Sycl3dAccesor
 {
 	friend class SyclBuffer;
 protected:
-	Sycl3dAccesor(cl::sycl::accessor<double, 1, mode, target>& _acc, const std::array<std::size_t, 3>& _dims)
+	Sycl3dAccesor(const cl::sycl::accessor<double, 1, mode, target>& _acc, const std::array<std::size_t, 3>& _dims)
 		: acc(_acc), dims(_dims)
 	{}
 
@@ -21,7 +21,7 @@ public:
 	}
 
 	template<class point_ref_x, class point_ref_y, class point_ref_z>
-	cl::sycl::detail::data_ref operator()(point_ref_x& x, point_ref_y& y, point_ref_z& z) const
+	cl::sycl::detail::data_ref operator()(const point_ref_x& x, const point_ref_y& y, const point_ref_z& z) const
 	{
 		const cl::sycl::int1 idx1 = z * (dims[1] * dims[0]) + y * dims[0] + x;
 		return acc[idx1];
@@ -39,7 +39,7 @@ public:
 	}
 
 	template<class point_ref_x, class point_ref_y, class point_ref_z>
-	cl::sycl::detail::data_ref shift1(point_ref_x& x, point_ref_y& y, point_ref_z& z) const
+	cl::sycl::detail::data_ref shift1(const point_ref_x& x, const point_ref_y& y, const point_ref_z& z) const
 	{
 		const cl::sycl::int1 idx1 = (z + 1) * (dims[1] * dims[0]) + (y + 1) * dims[0] + (x + 1);
 		return acc[idx1];
@@ -74,7 +74,6 @@ private:
 class SyclBuffer
 {
 public:
-	SyclBuffer() = default;
 	SyclBuffer(std::size_t x, std::size_t y, std::size_t z)
 		: buffer(cl::sycl::range<1>(x* y* z))
 	{
