@@ -39,9 +39,11 @@ void SyclSolver::solve(SyclGridData& grid)
 {
     auto platforms = platform::get_platforms();
     std::cout << "Number of platforms: " << platforms.size() << '\n';
-    platform P = platforms.at(0);
+    platform P = platforms.at(1); // 0 = CUDA, 1 = CPU
+    auto platformName = P.get_info<info::platform::name>();
+    std::cout << "Platform: " << platformName << '\n';
 
-    const auto devices = P.get_devices(info::device_type::gpu);
+    const auto devices = P.get_devices(info::device_type::all);
     device D = devices[0];
 
     context C(D);
@@ -74,12 +76,12 @@ void SyclSolver::solve(SyclGridData& grid)
 
 double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
 {
-    for (std::size_t i = 0; i < grid.numLevels() - 1; i++) {
+    queue.submit([&](handler& cgh) {
+    
+        for (std::size_t i = 0; i < grid.numLevels() - 1; i++) {
 
-        SyclGridData::LevelData& nextLevel = grid.getLevel(i + 1);
+            SyclGridData::LevelData& nextLevel = grid.getLevel(i + 1);
         
-        // TODO: move submit to outside of the loop
-        queue.submit([&](handler& cgh) {
             jacobi(cgh, grid, i, grid.preSmoothing);
 
             // clear v for next level
@@ -92,18 +94,14 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
 
             // restrict residual to next level f
             restrict(cgh, grid.getLevel(i).r, nextLevel.f);
-        });
-    }
+        }
 
-    queue.submit([&](handler& cgh) {
         jacobi(cgh, grid, grid.numLevels() - 1, grid.preSmoothing + grid.postSmoothing);
-    });
 
-    for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
-        SyclGridData::LevelData& thisLevel = grid.getLevel(i);
-        SyclGridData::LevelData& prevLevel = grid.getLevel(i-1);
+        for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
+            SyclGridData::LevelData& thisLevel = grid.getLevel(i);
+            SyclGridData::LevelData& prevLevel = grid.getLevel(i-1);
 
-        queue.submit([&](handler& cgh) {
             // interpolate v to previous level e
             interpolate(cgh, prevLevel.e, thisLevel.v);
 
@@ -114,9 +112,10 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
                 vAcc[index] += eAcc[index];
             });
 
-            jacobi(cgh, grid, i-1, grid.postSmoothing);
-        });
-    }
+            jacobi(cgh, grid, i - 1, grid.postSmoothing);
+        }
+
+    });
 
     double res = sumResidual(queue, grid, 0);
     return res;
@@ -133,10 +132,8 @@ void SyclSolver::jacobi(handler& cgh, SyclGridData& grid, std::size_t levelNum, 
     for (std::size_t i = 0; i < maxiter; i++) {
         compResidual(cgh, grid, levelNum);
 
-        cgh.parallel_for<class jacobi>(level.v.getRange(), [=](id<3> index3) {
-            int1 idx = vAcc.getIndex(index3);
-            double1 newV = vAcc[idx] + grid.omega * (alpha * rAcc[idx]);
-            vAcc[idx] = newV;
+        cgh.parallel_for<class jacobi>(range<1>(level.v.flatSize()), [=](id<1> idx) {
+            vAcc[idx[0]] += grid.omega * (alpha * rAcc[idx[0]]);
         });
     }
 }
