@@ -50,7 +50,7 @@ class program {
   void compile(KernelType kernFunctor, string_class compile_options = "") {
     auto src = detail::kernel_ns::constructor<
         typename detail::first_arg<KernelType>::type>::get(kernFunctor);
-    auto kern = shared_ptr_class<kernel>(new kernel(true));
+    auto kern = shared_ptr_class<kernel>(new kernel(this->ctx));
     kern->src = std::move(src);
     compile(compile_options, detail::kernel_name::get<KernelType>(), kern);
   }

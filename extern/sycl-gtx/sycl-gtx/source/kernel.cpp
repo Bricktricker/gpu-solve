@@ -6,6 +6,8 @@
 
 using namespace cl::sycl;
 
+kernel::kernel(const context& context) : ctx(context), prog(new program(ctx)) {}
+
 kernel::kernel(bool) : prog(new program(ctx)) {}
 
 kernel::kernel(cl_kernel k)

@@ -34,6 +34,7 @@ class kernel {
   detail::kernel_ns::source src;
 
   // These are meant only for program class
+  kernel(const context& context);
   kernel(bool);
   void set(cl_kernel openclKernelObject);
   void set(const context& context, cl_program validProgram);
