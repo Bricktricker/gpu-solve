@@ -40,10 +40,12 @@ void program::compile(string_class compile_options, ::size_t kernel_name_id,
 
   auto device_pointers = detail::get_cl_array(devices);
 
-  error_code = clCompileProgram(kern->prog.get()->get(),
-                                static_cast<::cl_uint>(devices.size()),
-                                device_pointers.data(), compile_options.c_str(),
-                                0, nullptr, nullptr, nullptr, nullptr);
+  error_code = clBuildProgram(kern->prog.get()->get(),
+                              static_cast<::cl_uint>(devices.size()),
+                              device_pointers.data(), compile_options.c_str(),
+                              nullptr, nullptr);
+  linked = true;
+  prog = *get_program_pointers().data();
 
   try {
     detail::error::report(error_code);
@@ -55,6 +57,8 @@ void program::compile(string_class compile_options, ::size_t kernel_name_id,
     }
     throw e;
   }
+
+  init_kernels();
 }
 
 void program::report_compile_error(shared_ptr_class<kernel> kern,

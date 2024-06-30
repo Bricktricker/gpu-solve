@@ -58,7 +58,7 @@ class program {
   template <class KernelType>
   void build(KernelType kernFunctor, string_class compile_options = "") {
     compile(kernFunctor, compile_options);
-    link();
+    //link(); done in the compile step
   }
 
  public:
