@@ -51,26 +51,7 @@ SyclGridData::SyclGridData(const GridParams& grid)
 }
 
 void SyclGridData::initBuffers(cl::sycl::handler& cgh)
-{
-	// Compute right hand side sum, if we are periodic
-	double leftFac = 0.0f;
-	if (this->periodic) {
-		double sum = 0.0;
-		for (int i = 0; i < levels[0].levelDim[0]; i++) {
-			for (int j = 0; j < levels[0].levelDim[1]; j++) {
-				for (int k = 0; k < levels[0].levelDim[2]; k++) {
-					double x = i * h;
-					double y = j * h;
-					double z = k * h;
-
-					double val = -h * h * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
-					sum += val;
-				}
-			}
-		}
-		leftFac = sum / (levels[0].levelDim[0] * levels[0].levelDim[1] * levels[0].levelDim[2]);
-	}
-	
+{	
 	auto wAccessor = levels[0].f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 	cl::sycl::range<3> range(levels[0].levelDim[0]+2, levels[0].levelDim[1]+2, levels[0].levelDim[2]+2);
 
@@ -93,8 +74,7 @@ void SyclGridData::initBuffers(cl::sycl::handler& cgh)
 
 			cl::sycl::double1 val = (- h * h) * (f2(x)* f0(y)* f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
 
-			assert(leftFac == 0.0);
-			wAccessor(index) = val; //-leftFac;
+			wAccessor(index) = val;
 		}
 		SYCL_END;
 	});
