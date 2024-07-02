@@ -1,4 +1,5 @@
 #include "SyclSolver.h"
+#include "../Timer.h"
 #include <iostream>
 #include <chrono>
 #include <string>
@@ -39,21 +40,24 @@ void SyclSolver::solve(SyclGridData& grid)
 {
     auto platforms = platform::get_platforms();
     std::cout << "Number of platforms: " << platforms.size() << '\n';
-    platform P = platforms.at(1); // 0 = CUDA, 1 = CPU
+    platform P = platforms.at(0); // 0 = CUDA, 1 = CPU
     auto platformName = P.get_info<info::platform::name>();
     std::cout << "Platform: " << platformName << '\n';
 
     const auto devices = P.get_devices(info::device_type::all);
-    device D = devices[0];
+    device D = devices.at(0);
+    std::cout << "Device: " << D.get_info<info::device::name>() << '\n';
 
     context C(D);
     
     {
         queue queue(C, D);
         
+        Timer::start();
         queue.submit([&](handler& cgh) {
             grid.initBuffers(cgh);
         });
+        Timer::stop();
 
         double resInital = sumResidual(queue, grid, 0);
         std::cout << "Inital residual: " << resInital << '\n';
@@ -61,7 +65,9 @@ void SyclSolver::solve(SyclGridData& grid)
         auto start = std::chrono::high_resolution_clock::now();
 
         for (std::size_t i = 0; i < grid.maxiter; i++) {
+            Timer::start();
             double res = vcycle(queue, grid);
+            Timer::stop();
 
             const auto end = std::chrono::high_resolution_clock::now();
             const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
