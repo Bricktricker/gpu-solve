@@ -9,6 +9,7 @@
 #include "SYCL/handler_event.h"
 #include "SYCL/program.h"
 #include "SYCL/ranges.h"
+#include <unordered_map>
 
 namespace cl {
 namespace sycl {
@@ -31,6 +32,8 @@ class handler {
   queue* q;
   handler_event events;
 
+  static std::unordered_map<cl::sycl::string_class, cl_kernel> kernel_cache;
+
   // TODO(progtx): Implementation defined constructor
   handler(queue* q) : q(q) {}
 
@@ -39,8 +42,30 @@ class handler {
   template <class KernelType>
   shared_ptr_class<kernel> build(KernelType kernFunctor) {
     detail::command::group_detail::check_scope();
+
+    auto src = detail::kernel_ns::constructor<
+        typename detail::first_arg<KernelType>::type>::get(kernFunctor);
+
+    string_class kernel_body = "";
+    for (auto& line : src.get_lines()) {
+      kernel_body += line;
+    }
+
+    auto cacheItr = kernel_cache.find(kernel_body);
+    if (cacheItr != kernel_cache.end()) {
+        // Found kernel in cache
+      auto kern = std::make_shared<kernel>(this->get_context(this->q));
+      kern->set(cacheItr->second);
+      kern->src = std::move(src);
+      return kern;
+    }
+
     program prog(get_context(q));
     prog.build(kernFunctor, "");
+
+    cl_kernel final_kernel = prog.kernels.begin()->second->get();
+    prog.kernels.begin()->second->kern.call_retain(final_kernel);
+    kernel_cache.insert(std::make_pair(kernel_body, final_kernel));
 
     // We know here the program only contains one kernel
     return prog.kernels.begin()->second;

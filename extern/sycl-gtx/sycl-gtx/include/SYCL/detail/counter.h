@@ -35,6 +35,10 @@ class counter {
   counter_t get_count_id() const {
     return counter_id;
   }
+
+  static void reset_counter() {
+    internal_count = 0;
+  }
 };
 
 template <class T, counter_t start>

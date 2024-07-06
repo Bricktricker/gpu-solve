@@ -21,25 +21,27 @@ class context;
 class event;
 class queue;
 class program;
+class handler;
 
 class kernel {
  private:
   friend class program;
   friend class detail::issue_command;
   friend class detail::kernel_ns::source;
+  friend class handler;
 
   detail::refc<cl_kernel, clRetainKernel, clReleaseKernel> kern;
   context ctx;
   shared_ptr_class<program> prog;
   detail::kernel_ns::source src;
 
+ public:
   // These are meant only for program class
   kernel(const context& context);
   kernel(bool);
   void set(cl_kernel openclKernelObject);
   void set(const context& context, cl_program validProgram);
 
- public:
   /**
    * The default object is not valid
    * because there is no program or cl_kernel associated with it

@@ -66,6 +66,7 @@ class source : protected counter<source> {
 
   string_class get_code() const;
   string_class get_kernel_name() const;
+  const vector_class<string_class>& get_lines() const;
 
   void init_kernel(program& p, shared_ptr_class<kernel> kern);
 

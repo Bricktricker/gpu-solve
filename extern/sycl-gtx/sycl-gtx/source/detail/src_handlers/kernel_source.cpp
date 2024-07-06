@@ -5,6 +5,7 @@
 #include "SYCL/error_handler.h"
 #include "SYCL/kernel.h"
 #include "SYCL/program.h"
+#include "SYCL/vectors/base.h"
 
 using namespace cl::sycl;
 using namespace detail::kernel_ns;
@@ -23,6 +24,11 @@ void source::enter(source& src) {
 }
 
 source source::exit(source& src) {
+  // Reset counters for kernel generation to allow caching
+  counter<detail::kernel_ns::source, 0>::reset_counter();
+  counter<detail::vectors::base<int, 1>, 0>::reset_counter();
+  counter<detail::vectors::base<double, 1>, 0>::reset_counter();
+
   scope = nullptr;
   return src;
 }
@@ -47,6 +53,10 @@ string_class source::get_code() const {
 
 string_class source::get_kernel_name() const {
   return kernel_name;
+}
+
+const vector_class<string_class>& source::get_lines() const {
+  return lines;
 }
 
 string_class source::generate_accessor_list() const {
