@@ -35,7 +35,7 @@ SyclGridData::SyclGridData(const GridParams& grid)
 			levelDim[0] = levels[i - 1].levelDim[0] / 2;
 			levelDim[1] = levels[i - 1].levelDim[1] / 2;
 			levelDim[2] = levels[i - 1].levelDim[2] / 2;
-			levelStencil = Stencil::fromPrevLevel(levels[i - 1].stencil);
+			levelStencil = Stencil::simpleStencil(this->stencil, i);
 		}
 
 		levels.push_back(LevelData{

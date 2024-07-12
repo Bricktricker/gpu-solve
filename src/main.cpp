@@ -35,10 +35,7 @@ int main(int argc, char* argv[]) {
         configFile >> gridParams.postSmoothing;
         configFile >> gridParams.omega;
 
-        // read stencil        
-        gridParams.stencil.values.resize(7);
-        gridParams.stencil.offsets.resize(7);
-
+        // read stencil
         for (std::size_t i = 0; i < gridParams.stencil.values.size(); i++) {
             configFile >> gridParams.stencil.values[i];
         }

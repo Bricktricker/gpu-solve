@@ -96,9 +96,9 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 		
 		compResidual(grid, levelNum);
 		
-		for (std::size_t x = 0; x < level.levelDim[0] + 2; x++) {
-			for (std::size_t y = 0; y < level.levelDim[1] + 2; y++) {
-				for (std::size_t z = 0; z < level.levelDim[2] + 2; z++) {
+		for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
+			for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
+				for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
 					double newV = level.v.get(x, y, z) + grid.omega * (alpha * level.r.get(x, y, z));
 					level.v.set(x, y, z, newV);
 				}

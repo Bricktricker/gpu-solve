@@ -1,5 +1,7 @@
 #include "gridParams.h"
 #include "cpu/Vector3.h"
+#include <algorithm>
+#include <assert.h>
 
 namespace {
 Vector3 conv3(const Vector3& a, const Vector3& b)
@@ -33,7 +35,8 @@ Vector3 conv3(const Vector3& a, const Vector3& b)
 }
 }
 
-Stencil Stencil::fromPrevLevel(const Stencil& prevStencil)
+/* TODO: Implement later?
+Stencil Stencil::galerkin(const Stencil& prevStencil)
 {
 	// create stencil for prolongation
 	Vector3 p(3, 3, 3);
@@ -97,4 +100,17 @@ Stencil Stencil::fromPrevLevel(const Stencil& prevStencil)
 	}
 
 	return finalStencil;
+}
+*/
+
+Stencil Stencil::simpleStencil(const Stencil& rootStencil, std::size_t level)
+{
+	assert(level > 0);
+	double factor = pow(0.5, static_cast<double>(level));
+	Stencil stencil = rootStencil;
+	std::transform(stencil.values.begin(), stencil.values.end(), stencil.values.begin(), [&](double val) {
+		return val / factor;
+	});
+
+	return stencil;
 }
