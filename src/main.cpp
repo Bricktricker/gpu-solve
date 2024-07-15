@@ -4,7 +4,9 @@
 #include "gridParams.h"
 #include "cpu/CpuGridData.h"
 #include "cpu/CpuSolver.h"
+#ifndef GPUSOLVE_CPU
 #include "sycl/SyclSolver.h"
+#endif
 
 int main(int argc, char* argv[]) {
 
@@ -64,13 +66,13 @@ int main(int argc, char* argv[]) {
 
     }
 
-    // TODO: check for cpu or gpu implementation
-    
-    //CpuGridData cpuGridData(gridParams);
-    //CpuSolver::solve(cpuGridData);
-
+#ifdef GPUSOLVE_CPU
+    CpuGridData cpuGridData(gridParams);
+    CpuSolver::solve(cpuGridData);
+#else
     SyclGridData syclGridData(gridParams);
     SyclSolver::solve(syclGridData);
+#endif
 
     return 0;
 }

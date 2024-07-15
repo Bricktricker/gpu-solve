@@ -1,79 +1,54 @@
 #pragma once
 #include <CL/sycl.hpp>
 #include <array>
+#include "sycl_compat.h"
 
 class SyclBuffer; // Forward declaration
+using BufferDim = std::array<std::size_t, 3>;
 
-template<cl::sycl::access::mode mode, cl::sycl::access::target target>
 class Sycl3dAccesor
 {
 	friend class SyclBuffer;
-protected:
-	Sycl3dAccesor(const cl::sycl::accessor<double, 1, mode, target>& _acc, const std::array<std::size_t, 3>& _dims)
-		: acc(_acc), dims(_dims)
-	{}
 
 public:
-	cl::sycl::detail::data_ref operator()(cl::sycl::id<3>& idx3) const
-	{
-		const cl::sycl::int1 idx1 = idx3[2] * (dims[1] * dims[0]) + idx3[1] * dims[0] + idx3[0];
-		return acc[idx1];
-	}
+	Sycl3dAccesor() = delete;
 
-	template<class point_ref_x, class point_ref_y, class point_ref_z>
-	cl::sycl::detail::data_ref operator()(const point_ref_x& x, const point_ref_y& y, const point_ref_z& z) const
-	{
-		const cl::sycl::int1 idx1 = z * (dims[1] * dims[0]) + y * dims[0] + x;
-		return acc[idx1];
-	}
-
-	cl::sycl::int1 getIndex(cl::sycl::id<3>& idx3) const
+	static int1 flatIndex(const BufferDim& dims, cl::sycl::id<3>& idx3)
 	{
 		return idx3[2] * (dims[1] * dims[0]) + idx3[1] * dims[0] + idx3[0];
 	}
 
-	cl::sycl::detail::data_ref shift1(cl::sycl::id<3>& idx3) const
-	{
-		const cl::sycl::int1 idx1 = (idx3[2]+1) * (dims[1] * dims[0]) + (idx3[1]+1) * dims[0] + (idx3[0]+1);
-		return acc[idx1];
-	}
-
+#ifdef SYCL_GTX_TARGET
 	template<class point_ref_x, class point_ref_y, class point_ref_z>
-	cl::sycl::detail::data_ref shift1(const point_ref_x& x, const point_ref_y& y, const point_ref_z& z) const
+	static int1 flatIndex(const BufferDim& dims, const point_ref_x& x, const point_ref_y& y, const point_ref_z& z)
+#else
+	static int flatIndex(const BufferDim& dims, const int x, const int y, const int z)
+#endif
 	{
-		const cl::sycl::int1 idx1 = (z + 1) * (dims[1] * dims[0]) + (y + 1) * dims[0] + (x + 1);
-		return acc[idx1];
+		return z * (dims[1] * dims[0]) + y * dims[0] + x;
 	}
 
-	cl::sycl::int1 shift1Index(cl::sycl::id<3>& idx3) const
+	static int1 shift1Index(const BufferDim& dims, cl::sycl::id<3>& idx3)
 	{
-		return (idx3[2] + 1) * (dims[1] * dims[0]) + (idx3[1] + 1) * dims[0] + (idx3[0] + 1);
+		return (idx3[2]+1) * (dims[1] * dims[0]) + (idx3[1]+1) * dims[0] + (idx3[0]+1);
 	}
 
+#ifdef SYCL_GTX_TARGET
 	template<class point_ref_x, class point_ref_y, class point_ref_z>
-	cl::sycl::int1 shift1Index(point_ref_x x, point_ref_y y, point_ref_z z) const
+	static cl::sycl::detail::data_ref shift1Index(const BufferDim& dims, const point_ref_x& x, const point_ref_y& y, const point_ref_z& z)
+#else
+	static int shift1Index(const BufferDim& dims, const int x, const int y, const int z)
+#endif
 	{
 		return (z + 1) * (dims[1] * dims[0]) + (y + 1) * dims[0] + (x + 1);
 	}
 
-	cl::sycl::detail::data_ref operator[](cl::sycl::int1& idx) const
-	{
-		return acc[idx];
-	}
-
-	cl::sycl::detail::data_ref operator[](cl::sycl::detail::data_ref& idx) const
-	{
-		return acc[idx];
-	}
-
-private:
-	cl::sycl::accessor<double, 1, mode, target> acc;
-	std::array<std::size_t, 3> dims;
 };
 
 class SyclBuffer
 {
 public:
+
 	SyclBuffer(std::size_t x, std::size_t y, std::size_t z)
 		: buffer(cl::sycl::range<1>(x* y* z))
 	{
@@ -83,9 +58,15 @@ public:
 	}
 
 	template<cl::sycl::access::mode mode, cl::sycl::access::target target = cl::sycl::access::target::global_buffer>
-	Sycl3dAccesor<mode, target> get_access(cl::sycl::handler& cgh)
+	cl::sycl::accessor<double, 1, mode, target> get_access(cl::sycl::handler& cgh)
 	{
-		return Sycl3dAccesor{ buffer.get_access<mode, target>(cgh), dims };
+		return buffer.get_access<mode, target>(cgh);
+	}
+
+	template<cl::sycl::access::mode mode>
+	cl::sycl::accessor<double, 1, mode, cl::sycl::access::target::host_buffer> get_host_access()
+	{
+		return buffer.get_access<mode, cl::sycl::access::target::host_buffer>();
 	}
 
 	std::size_t getXdim() const
@@ -105,17 +86,17 @@ public:
 		return dims[0] * dims[1] * dims[2];
 	}
 
-	cl::sycl::buffer<double, 1>& handle()
-	{
-		return buffer;
-	}
-
 	cl::sycl::range<3> getRange() const
 	{
 		return cl::sycl::range<3>(dims[0], dims[1], dims[2]);
 	}
 
+	const BufferDim& getDims() const
+	{
+		return dims;
+	}
+
 private:
 	cl::sycl::buffer<double, 1> buffer;
-	std::array<std::size_t, 3> dims;
+	BufferDim dims;
 };

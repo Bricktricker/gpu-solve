@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-project(GpuSolve)
+project(GpuSolve LANGUAGES CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release")
@@ -79,7 +79,9 @@ else()
     # TODO support Intel compiler
 endif()
 
-target_compile_options(GpuSolve PRIVATE ${PROJECT_WARNINGS})
+target_compile_options(GpuSolve-cpu PRIVATE ${PROJECT_WARNINGS})
+target_compile_options(GpuSolve-gtx PRIVATE ${PROJECT_WARNINGS})
+target_compile_options(GpuSolve-sycl PRIVATE ${PROJECT_WARNINGS})
 
 
 MESSAGE(STATUS "Built Type: " ${CMAKE_BUILD_TYPE} )

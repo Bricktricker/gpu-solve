@@ -3,6 +3,7 @@
 #include "SyclBuffer.h"
 #include <CL/sycl.hpp>
 #include <vector>
+#include "sycl_compat.h"
 
 class SyclGridData final : public GridParams
 {
@@ -19,7 +20,7 @@ public:
 
 	SyclGridData(const GridParams& grid);
 
-	void initBuffers(cl::sycl::handler& cgh);
+	void initBuffers(cl::sycl::queue& queue);
 
 	const LevelData& getLevel(std::size_t level) const
 	{
