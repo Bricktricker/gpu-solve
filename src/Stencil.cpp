@@ -2,6 +2,7 @@
 #include "cpu/Vector3.h"
 #include <algorithm>
 #include <assert.h>
+#include <math.h>
 
 namespace {
 Vector3 conv3(const Vector3& a, const Vector3& b)
