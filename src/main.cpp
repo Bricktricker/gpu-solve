@@ -36,6 +36,7 @@ int main(int argc, char* argv[]) {
         configFile >> gridParams.preSmoothing;
         configFile >> gridParams.postSmoothing;
         configFile >> gridParams.omega;
+        configFile >> gridParams.gamma;
 
         // read stencil
         for (std::size_t i = 0; i < gridParams.stencil.values.size(); i++) {

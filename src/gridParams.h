@@ -32,6 +32,7 @@ struct GridParams {
     std::size_t maxiter;
     double tol;
     double omega; // Relaxation coefficient
+    double gamma; // non-linear weight
     double h;
     std::array<std::size_t, 3> gridDim;
     std::size_t preSmoothing;
