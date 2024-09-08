@@ -15,6 +15,7 @@ void Vector3::set(std::size_t x, std::size_t y, std::size_t z, double val)
 {
 	const std::size_t idx = z + y * dims[2] + x * dims[2] * dims[1];
 	assert(idx < values.size());
+	assert(!std::isnan(val) && !std::isinf(val));
 	values[idx] = val;
 }
 
@@ -38,6 +39,17 @@ Vector3& Vector3::operator+=(const Vector3& rhs)
 		values[i] += rhs.values[i];
 	}
 	
+	return *this;
+}
+
+Vector3& Vector3::operator-=(const Vector3& rhs)
+{
+	assert(flatSize() == rhs.flatSize());
+
+	for (std::size_t i = 0; i < flatSize(); i++) {
+		values[i] -= rhs.values[i];
+	}
+
 	return *this;
 }
 

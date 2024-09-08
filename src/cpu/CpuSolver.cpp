@@ -38,6 +38,10 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 					double vVal = level.v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
 					stencilsum += level.stencil.values[i] * vVal;
 				}
+				// See tutorial_multigrid.pdf, page 102, Formula 6.13
+				double ex = exp(level.v.get(x, y, z));
+				double nonLinear = grid.gamma * level.v.get(x, y, z) * ex;
+				stencilsum += nonLinear;
 
 				double r = level.f.get(x, y, z) - stencilsum;
 				level.r.set(x, y, z, r);
@@ -65,6 +69,13 @@ double CpuSolver::vcycle(CpuGridData& grid)
 
 		// restrict residual to next level f
 		restrict(r, nextLevel.f);
+
+		// Compute A^2h (v^2h) for current level
+		restrict(grid.getLevel(i).v, nextLevel.restV);
+		const Vector3 nextLevelAppr = applyStencil(grid, i + 1, true);
+		// Add A^2h (v^2h) to r^2h
+		nextLevel.f += nextLevelAppr;
+
 		if (grid.periodic) updateGhosts(nextLevel.f);
 	}
 	
@@ -72,12 +83,17 @@ double CpuSolver::vcycle(CpuGridData& grid)
 	jacobi(grid, grid.numLevels() - 1, grid.preSmoothing+grid.postSmoothing);
 
 	for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
+		CpuGridData::LevelData& level = grid.getLevel(i);
+		
+		// compute u^2h = u^2h - v^2h
+		level.v -= level.restV;
+
 		// interpolate v to previos level e
 		interpolate(grid, i - 1);
 
 		// v = v + e
-		auto& level = grid.getLevel(i - 1);
-		level.v += level.e;
+		auto& levelPrev = grid.getLevel(i - 1);
+		levelPrev.v += levelPrev.e;
 
 		jacobi(grid, i - 1, grid.postSmoothing);
 	}
@@ -107,6 +123,33 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 	}
 
 	if (grid.periodic) updateGhosts(level.v);
+}
+
+Vector3 CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, bool useRestV)
+{
+	CpuGridData::LevelData& level = grid.getLevel(levelNum);
+	const Vector3& v = useRestV ? level.restV : level.v;
+	Vector3 result(v.getXdim(), v.getYdim(), v.getZdim());
+
+	for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
+		for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
+			for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
+
+				double stencilsum = 0.0;
+				for (std::size_t i = 0; i < level.stencil.values.size(); i++) {
+					double vVal = v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
+					stencilsum += level.stencil.values[i] * vVal;
+				}
+				// See tutorial_multigrid.pdf, page 102, Formula 6.13
+				double nonLinear = grid.gamma * v.get(x, y, z) * exp(v.get(x, y, z));
+				stencilsum += nonLinear;
+
+				result.set(x, y, z, stencilsum);
+			}
+		}
+	}
+
+	return result;
 }
 
 void CpuSolver::restrict(const Vector3& fine, Vector3& coarse)
