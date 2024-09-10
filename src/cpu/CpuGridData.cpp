@@ -55,7 +55,7 @@ CpuGridData::CpuGridData(const GridParams& grid)
 				double y = j * h;
 				double z = k * h;
 
-				double val = -h * h * 3.0 * ((x - x * x) + (y - y * y) + (z - z * z))
+				double val = -h * h * ((y - y*y) * (z - z*z) * (1 - 2*x) + (x - x*x) * (z - z*z) * (1 - 2*y) + (x - x*x) * (y -y*y) * (1 - 2*z))
 					+ gamma * (x - x * x) * (y - y * y) * (z - z * z)
 					* exp((x - x * x) * (y - y * y) * (z - z * z));
 
