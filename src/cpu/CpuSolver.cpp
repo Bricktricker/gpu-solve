@@ -38,6 +38,8 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 					double vVal = level.v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
 					stencilsum += level.stencil.values[i] * vVal;
 				}
+				stencilsum /= grid.h * grid.h;
+
 				// See tutorial_multigrid.pdf, page 102, Formula 6.13
 				double ex = exp(level.v.get(x, y, z));
 				double nonLinear = grid.gamma * level.v.get(x, y, z) * ex;
@@ -140,6 +142,7 @@ Vector3 CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, bool us
 					double vVal = v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
 					stencilsum += level.stencil.values[i] * vVal;
 				}
+				stencilsum /= grid.h * grid.h;
 				// See tutorial_multigrid.pdf, page 102, Formula 6.13
 				double nonLinear = grid.gamma * v.get(x, y, z) * exp(v.get(x, y, z));
 				stencilsum += nonLinear;
