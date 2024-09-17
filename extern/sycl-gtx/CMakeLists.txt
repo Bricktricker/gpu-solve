@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.2)
 
-project(sycl-gtx-solution)
+project(sycl-gtx-solution LANGUAGES CXX)
 
 # Requirements
 set(CMAKE_CXX_STANDARD 11)

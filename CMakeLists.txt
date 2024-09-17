@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -82,6 +82,33 @@ endif()
 target_compile_options(GpuSolve-cpu PRIVATE ${PROJECT_WARNINGS})
 target_compile_options(GpuSolve-gtx PRIVATE ${PROJECT_WARNINGS})
 target_compile_options(GpuSolve-sycl PRIVATE ${PROJECT_WARNINGS})
+
+# Check for Release build
+if("${CMAKE_BUILD_TYPE}" MATCHES "Rel")
+    MESSAGE(STATUS "Enabling Release optimizations")
+
+    # Enable Link Time Optimization for release build
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ltosupported OUTPUT error)
+    if( ltosupported )
+        set_property(TARGET GpuSolve-cpu PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+        set_property(TARGET GpuSolve-gtx PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+        set_property(TARGET GpuSolve-sycl PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    else()
+        message(STATUS "IPO / LTO not supported: <${error}>")
+    endif()
+
+    if(MSVC)
+        target_compile_options(GpuSolve-cpu INTERFACE /arch:AVX2)
+        target_compile_options(GpuSolve-gtx INTERFACE /arch:AVX2)
+        target_compile_options(GpuSolve-sycl INTERFACE /arch:AVX2)
+    else()
+        target_compile_options(GpuSolve-cpu INTERFACE -march=native)
+        target_compile_options(GpuSolve-gtx INTERFACE -march=native)
+        target_compile_options(GpuSolve-sycl INTERFACE -march=native)
+    endif()
+
+endif()
 
 
 MESSAGE(STATUS "Built Type: " ${CMAKE_BUILD_TYPE} )
