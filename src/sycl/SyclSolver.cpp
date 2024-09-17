@@ -48,20 +48,28 @@ void SyclSolver::solve(SyclGridData& grid)
 {
     auto platforms = platform::get_platforms();
     std::cout << "Number of platforms: " << platforms.size() << '\n';
-    size_t platformIdx = 0;
-    for (size_t i = 0; i < platforms.size(); i++) {
-        auto platformName = platforms[i].get_info<info::platform::name>();
-        if (platformName.find("CUDA") != std::string::npos) {
-            platformIdx = i;
-            break;
+    std::size_t platformIdx = 0;
+    std::size_t deviceIdx = 0;
+    for (std::size_t i = 0; i < platforms.size(); i++) {
+        const platform& P = platforms[i];
+        
+        const auto devices = P.get_devices(info::device_type::all);
+        bool foundDevice = false;
+        for (std::size_t j = 0; j < devices.size(); j++) {
+            const auto& device = devices[j];
+            if (device.is_gpu()) {
+                platformIdx = i;
+                deviceIdx = j;
+                foundDevice = true;
+            }
         }
     }
-    platform P = platforms.at(platformIdx);
+    const platform& P = platforms.at(platformIdx);
     auto platformName = P.get_info<info::platform::name>();
     std::cout << "Platform: " << platformName << '\n';
 
     const auto devices = P.get_devices(info::device_type::all);
-    device D = devices.at(0);
+    const device& D = devices.at(deviceIdx);
     std::cout << "Device: " << D.get_info<info::device::name>() << '\n';
 
     context C(D);
