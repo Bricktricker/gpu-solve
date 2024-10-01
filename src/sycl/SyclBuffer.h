@@ -34,6 +34,16 @@ public:
 	}
 
 #ifdef SYCL_GTX_TARGET
+	template<class point_ref_t>
+	static int1 shift1Index(const BufferDim& dims, point_ref_t idx3)
+#else
+	static int1 shift1Index(const BufferDim& dims, int3 idx3)
+#endif
+	{
+		return (idx3.z() + 1) * (dims[1] * dims[0]) + (idx3.y() + 1) * dims[0] + (idx3.x() + 1);
+	}
+
+#ifdef SYCL_GTX_TARGET
 	template<class point_ref_x, class point_ref_y, class point_ref_z>
 	static cl::sycl::detail::data_ref shift1Index(const BufferDim& dims, const point_ref_x& x, const point_ref_y& y, const point_ref_z& z)
 #else
@@ -42,6 +52,28 @@ public:
 	{
 		return (z + 1) * (dims[1] * dims[0]) + (y + 1) * dims[0] + (x + 1);
 	}
+
+#ifdef SYCL_GTX_TARGET
+	template<class point_ref_flat>
+	static int3 cubeIndex(const BufferDim& dims, const point_ref_flat& flatIndex)
+	{
+		// TODO: syxl-gtx generated codes that does a lot of the computations mulltiple times, fix that
+		int1 z = int1::create_var(flatIndex / (dims[0] * dims[1]));
+		int1 modFlatIndex = int1::create_var(flatIndex - (z * dims[0] * dims[1]));
+		int1 y = modFlatIndex / dims[0];
+		int1 x = modFlatIndex % dims[0];
+		return int3{ x, y, z };
+}
+#else
+	static int3 cubeIndex(const BufferDim& dims, const int flatIndex)
+	{
+		int1 z = flatIndex / (dims[0] * dims[1]);
+		int1 modFlatIndex = flatIndex - (z * dims[0] * dims[1]);
+		int1 y = modFlatIndex / dims[0];
+		int1 x = modFlatIndex % dims[0];
+		return int3{ x, y, z };
+	}
+#endif
 
 };
 

@@ -44,7 +44,11 @@ struct nd_item {
     return global_item;
   }
 
+  [[deprecated("Use get_global_id() instead.")]]
   id<dimensions> get_global() const {
+    return get_global_id();
+  }
+  id<dimensions> get_global_id() const {
     return global_item.get();
   }
   size_t get_global(int dimension) const {

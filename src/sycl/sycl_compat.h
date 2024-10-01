@@ -17,6 +17,7 @@
   for (init; condition; increment)
 #endif
 
+using cl::sycl::int3;
 #ifdef SYCL_GTX_TARGET
 using cl::sycl::int1;
 using cl::sycl::double1;
