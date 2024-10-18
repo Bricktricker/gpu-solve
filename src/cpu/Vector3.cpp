@@ -60,13 +60,17 @@ void Vector3::dump(const std::string& file) const
 		out.open(file);
 	}
 
+	if (out) {
+		out << getXdim() << ' ' << getYdim() << ' ' << getZdim() << '\n';
+	}
+
 	for (std::size_t x = 0; x < getXdim(); x++) {
 		for (std::size_t y = 0; y < getYdim(); y++) {
 			for (std::size_t z = 0; z < getZdim(); z++) {
 				if (out) {
-					out << "Index: " << x << ' ' << y << ' ' << z << " Value: " << get(x, y, z) << '\n';
+					out << x << ' ' << y << ' ' << z << ' ' << get(x, y, z) << '\n';
 				}else {
-					std::cout << "Index: " << x << ' ' << y << ' ' << z << " Value: " << get(x, y, z) << '\n';
+					std::cout << x << ' ' << y << ' ' << z << ' ' << get(x, y, z) << '\n';
 				}
 			}
 		}

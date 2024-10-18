@@ -1,6 +1,7 @@
 #include "CpuSolver.h"
 #include <assert.h>
 #include <iostream>
+#include <fstream>
 #include <chrono>
 #include <math.h>
 
@@ -21,6 +22,10 @@ void CpuSolver::solve(CpuGridData& grid)
 		start = end;
 
 		std::cout << "iter: " << i << " residual: " << res << " took " << time << "ms\n";
+
+		const std::string fileName = "v_" + std::to_string(i + 1) + ".txt";
+		const auto& rootLevel = grid.getLevel(0);
+		rootLevel.v.dump(fileName);
 	}
 }
 
@@ -108,6 +113,7 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 {	
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 	const double alpha = 1.0 / level.stencil.values[0]; // stencil center
+	const double preFac = level.stencil.values[0] / (grid.h * grid.h);
 
 	for (std::size_t i = 0; i < maxiter; i++) {
 		if(grid.periodic) updateGhosts(level.v);
@@ -117,7 +123,10 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 		for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
 			for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
 				for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
-					double newV = level.v.get(x, y, z) + grid.omega * (alpha * level.r.get(x, y, z));
+					double ex = exp(level.v.get(x, y, z));
+					double denuminator = preFac + grid.gamma * (1 + level.v.get(x, y, z)) * ex;
+
+					double newV = level.v.get(x, y, z) + grid.omega * (level.r.get(x, y, z) / denuminator);
 					level.v.set(x, y, z, newV);
 				}
 			}
