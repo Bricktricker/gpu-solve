@@ -14,6 +14,7 @@ public:
         Vector3 e; // error
         std::array<std::size_t, 3> levelDim;
         Stencil stencil;
+        double h;
     };
 
     CpuGridData(const GridParams& grid);

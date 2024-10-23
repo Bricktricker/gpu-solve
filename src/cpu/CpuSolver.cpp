@@ -43,7 +43,7 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 					double vVal = level.v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
 					stencilsum += level.stencil.values[i] * vVal;
 				}
-				stencilsum /= grid.h * grid.h;
+				stencilsum /= level.h * level.h;
 
 				// See tutorial_multigrid.pdf, page 102, Formula 6.13
 				double ex = exp(level.v.get(x, y, z));
@@ -74,12 +74,17 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		Vector3& r = grid.getLevel(i).r;
 		if (grid.periodic) updateGhosts(r);
 
+		// See tutorial_multigrid.pdf, page 98, Full Approximation Scheme (FAS)
+
 		// restrict residual to next level f
+		// f^2h = r^2h
 		restrict(r, nextLevel.f);
 
-		// Compute A^2h (v^2h) for current level
+		// restrict v^h to next level v^2h
 		restrict(grid.getLevel(i).v, nextLevel.restV);
-		const Vector3 nextLevelAppr = applyStencil(grid, i + 1, true);
+
+		// Compute A^2h (v^2h)
+		const Vector3 nextLevelAppr = applyStencil(grid, i + 1, nextLevel.restV);
 		// Add A^2h (v^2h) to r^2h
 		nextLevel.f += nextLevelAppr;
 
@@ -95,7 +100,7 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		// compute u^2h = u^2h - v^2h
 		level.v -= level.restV;
 
-		// interpolate v to previos level e
+		// interpolate v^2h to previos level e^h
 		interpolate(grid, i - 1);
 
 		// v = v + e
@@ -113,14 +118,13 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 {	
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 	const double alpha = 1.0 / level.stencil.values[0]; // stencil center
-	const double preFac = level.stencil.values[0] / (grid.h * grid.h);
+	const double preFac = level.stencil.values[0] / (level.h * level.h);
 
 	for (std::size_t i = 0; i < maxiter; i++) {
 		if(grid.periodic) updateGhosts(level.v);
 		
 		compResidual(grid, levelNum);
 		
-		// Generiert sinus Lösung
 		for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
 			for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
 				for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
@@ -151,7 +155,7 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 						double vVal = level.v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
 						stencilsum += level.stencil.values[i] * vVal;
 					}
-					stencilsum /= grid.h * grid.h;
+					stencilsum /= level.h * level.h;
 					// See tutorial_multigrid.pdf, page 102, Formula 6.13
 					double nonLinear = grid.gamma * level.v.get(x, y, z) * ex;
 					stencilsum += nonLinear;
@@ -169,10 +173,10 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 	if (grid.periodic) updateGhosts(level.v);
 }
 
-Vector3 CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, bool useRestV)
+Vector3 CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vector3& v)
 {
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
-	const Vector3& v = useRestV ? level.restV : level.v;
+	assert(level.v.flatSize() == v.flatSize());
 	Vector3 result(v.getXdim(), v.getYdim(), v.getZdim());
 
 	for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
@@ -184,7 +188,7 @@ Vector3 CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, bool us
 					double vVal = v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
 					stencilsum += level.stencil.values[i] * vVal;
 				}
-				stencilsum /= grid.h * grid.h;
+				stencilsum /= level.h * level.h;
 				// See tutorial_multigrid.pdf, page 102, Formula 6.13
 				double nonLinear = grid.gamma * v.get(x, y, z) * exp(v.get(x, y, z));
 				stencilsum += nonLinear;

@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+ITERATION = 1
+
 def u(x, y, z):
     return (x - x*x) * (y - y*y) * (z - z*z)
 
@@ -27,12 +29,12 @@ def truePlot(n):
     output = u(X, Y, Z)
     return output
 
-computed = readFile("out/build/x64-Debug/src/v_6.txt")
+computed = readFile(f"out/build/x64-Debug/src/v_{ITERATION}.txt")
 n = computed.shape[0]
 
 trueOut = truePlot(n)
-spliceTrue = trueOut[:, 65, 65]
-spliceComp = computed[:, 65, 65]
+spliceTrue = trueOut[:, trueOut.shape[1]//2, trueOut.shape[2]//2]
+spliceComp = computed[:, trueOut.shape[1]//2, trueOut.shape[2]//2]
 
 line = np.linspace(0.0, 1.0, n)
 

@@ -44,6 +44,12 @@ CpuGridData::CpuGridData(const GridParams& grid)
 		if (i + 1 != maxlevel) {
 			level.e = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
 		}
+
+		if (grid.periodic) {
+			level.h = 1.0 / level.levelDim[1];
+		}else {
+			level.h = 1.0 / (level.levelDim[1] + 1);
+		}
 	}
 
 	// fill right hand side for the first level
