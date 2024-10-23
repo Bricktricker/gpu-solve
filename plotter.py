@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 ITERATION = 1
 
@@ -29,7 +30,12 @@ def truePlot(n):
     output = u(X, Y, Z)
     return output
 
-computed = readFile(f"out/build/x64-Debug/src/v_{ITERATION}.txt")
+if len(sys.argv) > 1:
+    txtFile = sys.argv[1]
+else:
+    txtFile = f"out/build/x64-Debug/src/v_{ITERATION}.txt"
+
+computed = readFile(txtFile)
 n = computed.shape[0]
 
 trueOut = truePlot(n)
