@@ -107,7 +107,7 @@ Stencil Stencil::galerkin(const Stencil& prevStencil)
 Stencil Stencil::simpleStencil(const Stencil& rootStencil, std::size_t level)
 {
 	assert(level > 0);
-	double factor = pow(0.5, static_cast<double>(level));
+	double factor = 1.0;//pow(0.5, static_cast<double>(level));
 	Stencil stencil = rootStencil;
 	std::transform(stencil.values.begin(), stencil.values.end(), stencil.values.begin(), [&](double val) {
 		return val / factor;

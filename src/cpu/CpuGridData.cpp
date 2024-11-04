@@ -34,7 +34,7 @@ CpuGridData::CpuGridData(const GridParams& grid)
 			level.levelDim[0] = levels[i - 1].levelDim[0] / 2;
 			level.levelDim[1] = levels[i - 1].levelDim[1] / 2;
 			level.levelDim[2] = levels[i - 1].levelDim[2] / 2;
-			level.stencil = Stencil::simpleStencil(this->stencil, i);
+			level.stencil = this->stencil; //Stencil::simpleStencil(this->stencil, i);
 		}
 
 		level.v = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);

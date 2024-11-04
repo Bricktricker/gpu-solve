@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 
-ITERATION = 1
+ITERATION = 10
 
 def u(x, y, z):
     return (x - x*x) * (y - y*y) * (z - z*z)

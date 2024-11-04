@@ -65,9 +65,7 @@ double CpuSolver::vcycle(CpuGridData& grid)
 	for (std::size_t i = 0; i < grid.numLevels()-1; i++) {
 		jacobi(grid, i, grid.preSmoothing);
 
-		// clear v for next level
 		CpuGridData::LevelData& nextLevel = grid.getLevel(i + 1);
-		nextLevel.v.fill(0.0);
 
 		// compute residual
 		compResidual(grid, i);
@@ -82,7 +80,8 @@ double CpuSolver::vcycle(CpuGridData& grid)
 
 		// restrict v^h to next level v^2h
 		restrict(grid.getLevel(i).v, nextLevel.restV);
-
+		restrict(grid.getLevel(i).v, nextLevel.v);
+		
 		// Compute A^2h (v^2h)
 		const Vector3 nextLevelAppr = applyStencil(grid, i + 1, nextLevel.restV);
 		// Add A^2h (v^2h) to r^2h
@@ -137,37 +136,6 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 				}
 			}
 		}
-		
-		/*
-		for (std::size_t j = 0; j < 2; j++) {
-		for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
-			for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
-				for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
-					if ((x + y + z) % 2 == j) {
-						continue;
-					}
-
-					double ex = exp(level.v.get(x, y, z));
-					double denuminator = preFac + grid.gamma * (1 + level.v.get(x, y, z)) * ex;
-
-					double stencilsum = 0.0;
-					for (std::size_t i = 0; i < level.stencil.values.size(); i++) {
-						double vVal = level.v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
-						stencilsum += level.stencil.values[i] * vVal;
-					}
-					stencilsum /= level.h * level.h;
-					// See tutorial_multigrid.pdf, page 102, Formula 6.13
-					double nonLinear = grid.gamma * level.v.get(x, y, z) * ex;
-					stencilsum += nonLinear;
-					stencilsum -= level.f.get(x, y, z);
-
-					double newV = level.v.get(x, y, z) - grid.omega * (stencilsum / denuminator);
-					level.v.set(x, y, z, newV);
-				}
-			}
-		}
-		}
-		*/
 	}
 
 	if (grid.periodic) updateGhosts(level.v);
@@ -216,7 +184,7 @@ void CpuSolver::restrict(const Vector3& fine, Vector3& coarse)
 				for (int ii = -2 + 1; ii < 2; ii++) {
 					for (int jj = -2 + 1; jj < 2; jj++) {
 						for (int kk = -2 + 1; kk < 2; kk++) {
-							double fac = ((2.0 - abs(ii)) / 2.0) * ((2.0 - abs(jj)) / 2.0) * ((2.0 - abs(kk)) / 2.0);
+							double fac = 0.125 * ((2.0 - abs(ii)) / 2.0) * ((2.0 - abs(jj)) / 2.0) * ((2.0 - abs(kk)) / 2.0);
 							coarseValue += fac * fine.get(xCenter + ii, yCenter + jj, zCenter + kk);
 						}
 					}
