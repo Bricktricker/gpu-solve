@@ -3,16 +3,6 @@
 #include <algorithm>
 #include <tuple>
 
-// TODO: move them somewhere else
-namespace {
-double f0(double x) {
-	return(100 * x * (x - 1.0) * x * (x - 1.0) * x * (x - 1.0) * x * (x - 1.0));
-}
-double f2(double x) {
-	return(100.0 * 4.0 * (x - 1.0) * (x - 1.0) * x * x * (14.0 * x * x - 14.0 * x + 3));
-}
-}
-
 CpuGridData::CpuGridData(const GridParams& grid)
 	: GridParams(grid)
 {
@@ -34,7 +24,7 @@ CpuGridData::CpuGridData(const GridParams& grid)
 			level.levelDim[0] = levels[i - 1].levelDim[0] / 2;
 			level.levelDim[1] = levels[i - 1].levelDim[1] / 2;
 			level.levelDim[2] = levels[i - 1].levelDim[2] / 2;
-			level.stencil = this->stencil; //Stencil::simpleStencil(this->stencil, i);
+			level.stencil = this->stencil;
 		}
 
 		level.v = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
@@ -54,18 +44,18 @@ CpuGridData::CpuGridData(const GridParams& grid)
 
 	// fill right hand side for the first level
 	double sum = 0.0;
-	for (int i = 0; i < levels[0].levelDim[0]; i++) {
-		for (int j = 0; j < levels[0].levelDim[1]; j++) {
-			for (int k = 0; k < levels[0].levelDim[2]; k++) {
+	for (int i = 0; i < levels[0].levelDim[0]+2; i++) {
+		for (int j = 0; j < levels[0].levelDim[1]+2; j++) {
+			for (int k = 0; k < levels[0].levelDim[2]+2; k++) {
 				double x = i * h;
 				double y = j * h;
 				double z = k * h;
 
-				double val = -((y - y*y) * (z - z*z) * (1 - 2*x) + (x - x*x) * (z - z*z) * (1 - 2*y) + (x - x*x) * (y -y*y) * (1 - 2*z))
+				double val = 2.0*((y - y*y) * (z - z*z) + (x - x*x) * (z - z*z) + (x - x*x) * (y -y*y))
 					+ gamma * (x - x * x) * (y - y * y) * (z - z * z)
 					* exp((x - x * x) * (y - y * y) * (z - z * z));
 
-				levels[0].f.set(i+1, j+1, k+1, val);
+				levels[0].f.set(i, j, k, val);
 				sum += val;
 			}
 		}

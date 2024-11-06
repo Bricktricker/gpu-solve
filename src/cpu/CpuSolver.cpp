@@ -22,10 +22,6 @@ void CpuSolver::solve(CpuGridData& grid)
 		start = end;
 
 		std::cout << "iter: " << i << " residual: " << res << " took " << time << "ms\n";
-
-		const std::string fileName = "v_" + std::to_string(i + 1) + ".txt";
-		const auto& rootLevel = grid.getLevel(0);
-		rootLevel.v.dump(fileName);
 	}
 }
 
