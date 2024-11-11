@@ -77,10 +77,10 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		restrict(grid.getLevel(i).v, nextLevel.restV);
 		restrict(grid.getLevel(i).v, nextLevel.v);
 		
-		// Compute A^2h (v^2h)
-		const Vector3 nextLevelAppr = applyStencil(grid, i + 1, nextLevel.restV);
+		// Compute A^2h (v^2h) and store it in r
+		applyStencil(grid, i + 1, nextLevel.restV);
 		// Add A^2h (v^2h) to r^2h
-		nextLevel.f += nextLevelAppr;
+		nextLevel.f += nextLevel.r;
 
 		if (grid.periodic) updateGhosts(nextLevel.f);
 	}
@@ -135,11 +135,11 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 	if (grid.periodic) updateGhosts(level.v);
 }
 
-Vector3 CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vector3& v)
+void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vector3& v)
 {
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 	assert(level.v.flatSize() == v.flatSize());
-	Vector3 result(v.getXdim(), v.getYdim(), v.getZdim());
+	Vector3& result = level.r;
 
 	for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
 		for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
@@ -159,8 +159,6 @@ Vector3 CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const V
 			}
 		}
 	}
-
-	return result;
 }
 
 void CpuSolver::restrict(const Vector3& fine, Vector3& coarse)
