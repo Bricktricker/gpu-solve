@@ -1,4 +1,5 @@
 #include "SyclSolver.h"
+#include "SyclSolver.h"
 #include "../Timer.h"
 #include <iostream>
 #include <chrono>
@@ -98,18 +99,25 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
 
         jacobi(queue, grid, i, grid.preSmoothing);
 
-        // clear v for next level
-        queue.submit([&](handler& cgh) {
-            auto vAcc = nextLevel.v.get_access<access::mode::discard_write>(cgh);
-            cgh.parallel_for<class reset>(range<1>(nextLevel.v.flatSize()), [=](id<1> index) {
-                vAcc[index] = 0.0;
-            });
-        });
-
         compResidual(queue, grid, i);
 
         // restrict residual to next level f
         restrict(queue, grid.getLevel(i).r, nextLevel.f);
+
+        restrict(queue, grid.getLevel(i).v, nextLevel.restV);
+        restrict(queue, grid.getLevel(i).v, nextLevel.v);
+
+        // Compute A^2h (v^2h), and save it in r, so we don't need a new buffer for it
+        applyStencil(queue, grid, i + 1, nextLevel.restV);
+
+        // Add A^2h (v^2h) to r^2h
+        queue.submit([&](handler& cgh) {
+            auto fAcc = nextLevel.f.get_access<access::mode::read_write>(cgh);
+            auto rAcc = nextLevel.r.get_access<access::mode::read>(cgh);
+            cgh.parallel_for<class sum>(range<1>(nextLevel.f.flatSize()), [=](id<1> index) {
+                fAcc[index] += rAcc[index];
+            });
+        });
     }
 
     jacobi(queue, grid, grid.numLevels() - 1, grid.preSmoothing + grid.postSmoothing);
@@ -117,6 +125,15 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
     for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
         SyclGridData::LevelData& thisLevel = grid.getLevel(i);
         SyclGridData::LevelData& prevLevel = grid.getLevel(i - 1);
+
+        // compute u^2h = u^2h - v^2h
+        queue.submit([&](handler& cgh) {
+            auto vAcc = thisLevel.v.get_access<access::mode::read_write>(cgh);
+            auto restvAcc = thisLevel.restV.get_access<access::mode::read>(cgh);
+            cgh.parallel_for<class sum>(range<1>(thisLevel.v.flatSize()), [=](id<1> index) {
+                vAcc[index] -= restvAcc[index];
+            });
+        });
 
         // interpolate v to previous level e
         interpolate(queue, prevLevel.e, thisLevel.v);
@@ -140,7 +157,7 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
 void SyclSolver::jacobi(queue& queue, SyclGridData& grid, std::size_t levelNum, std::size_t maxiter)
 {
     SyclGridData::LevelData& level = grid.getLevel(levelNum);
-    const double alpha = 1.0 / level.stencil.values[0]; // stencil center
+    const double preFac = level.stencil.values[0] / (level.h * level.h);
 
     for (std::size_t i = 0; i < maxiter; i++) {
         compResidual(queue, grid, levelNum);
@@ -150,7 +167,12 @@ void SyclSolver::jacobi(queue& queue, SyclGridData& grid, std::size_t levelNum, 
             auto rAcc = level.r.get_access<access::mode::read>(cgh);
 
             cgh.parallel_for<class jacobiK>(range<1>(level.v.flatSize()), [=, omega=grid.omega](id<1> idx) {
-                vAcc[idx[0]] += omega * (alpha * rAcc[idx[0]]);
+                double1 vVal = vAcc[idx[0]];
+                double1 ex = cl::sycl::exp(vVal);
+                double1 denuminator = preFac + grid.gamma * (1 + vVal) * ex;
+
+                double1 newV = vVal + grid.omega * (rAcc[idx[0]] / denuminator);
+                vAcc[idx[0]] = newV;
             });
         });
     }
@@ -175,9 +197,54 @@ void SyclSolver::compResidual(queue& queue, SyclGridData& grid, std::size_t leve
                 auto vVal = vAcc[flatIdx];
                 stencilsum += stencil.values[i] * vVal;
             }
+            stencilsum /= level.h * level.h;
 
             int1 centerIdx = Sycl3dAccesor::shift1Index(dims, index);
+
+            // See tutorial_multigrid.pdf, page 102, Formula 6.13
+            double1 vVal = vAcc[centerIdx];
+            double1 ex = cl::sycl::exp(vVal);
+            double1 nonLinear = grid.gamma * vVal * ex;
+            stencilsum += nonLinear;
+
             rAcc[centerIdx] = fAcc[centerIdx] - stencilsum;
+        });
+    });
+}
+
+// save result in 'r'
+void SyclSolver::applyStencil(cl::sycl::queue& queue, SyclGridData& grid, std::size_t levelNum, SyclBuffer& v)
+{
+    SyclGridData::LevelData& level = grid.getLevel(levelNum);
+    assert(level.v.flatSize() == v.flatSize());
+    SyclBuffer& result = level.r;
+
+    range<3> range(level.levelDim[0], level.levelDim[1], level.levelDim[2]);
+
+    queue.submit([&](handler& cgh) {
+
+        auto vAcc = v.get_access<access::mode::read>(cgh);
+        auto resultAcc = result.get_access<access::mode::write>(cgh);
+
+        cgh.parallel_for<class apply>(range, [=, dims=v.getDims(), stencil=level.stencil](id<3> index) {
+            
+            double1 stencilsum = 0.0;
+            for (std::size_t i = 0; i < stencil.values.size(); i++) {
+                const int1 flatIdx = Sycl3dAccesor::flatIndex(dims, index[0] + (stencil.getXOffset(i) + 1), index[1] + (stencil.getYOffset(i) + 1), index[2] + (stencil.getZOffset(i) + 1));
+                auto vVal = vAcc[flatIdx];
+                stencilsum += stencil.values[i] * vVal;
+            }
+            stencilsum /= level.h * level.h;
+
+            int1 centerIdx = Sycl3dAccesor::shift1Index(dims, index);
+
+            // See tutorial_multigrid.pdf, page 102, Formula 6.13
+            double1 vVal = vAcc[centerIdx];
+            double1 ex = cl::sycl::exp(vVal);
+            double1 nonLinear = grid.gamma * vVal * ex;
+            stencilsum += nonLinear;
+
+            resultAcc[centerIdx] = stencilsum;
         });
     });
 }
@@ -301,7 +368,7 @@ void SyclSolver::restrict(queue& queue, SyclBuffer& fine, SyclBuffer& coarse)
             for (int ii = -2 + 1; ii < 2; ii++) {
                 for (int jj = -2 + 1; jj < 2; jj++) {
                     for (int kk = -2 + 1; kk < 2; kk++) {
-                        double fac = ((2.0 - abs(ii)) / 2.0) * ((2.0 - abs(jj)) / 2.0) * ((2.0 - abs(kk)) / 2.0);
+                        double fac = 0.125 * ((2.0 - abs(ii)) / 2.0) * ((2.0 - abs(jj)) / 2.0) * ((2.0 - abs(kk)) / 2.0);
                         double1 fineVal = fineAcc[Sycl3dAccesor::flatIndex(fineDims, xCenter + ii, yCenter + jj, zCenter + kk)];
                         coarseValue += fac * fineVal;
                     }

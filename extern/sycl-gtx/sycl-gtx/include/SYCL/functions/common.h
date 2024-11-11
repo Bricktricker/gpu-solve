@@ -20,6 +20,7 @@ SYCL_ONE_ARG(cos);
 SYCL_ONE_ARG(fabs);
 SYCL_ONE_ARG(sin);
 SYCL_ONE_ARG(sqrt);
+SYCL_ONE_ARG(exp);
 
 #undef SYCL_ONE_ARG
 

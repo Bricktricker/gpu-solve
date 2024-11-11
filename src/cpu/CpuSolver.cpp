@@ -1,7 +1,6 @@
 #include "CpuSolver.h"
 #include <assert.h>
 #include <iostream>
-#include <fstream>
 #include <chrono>
 #include <math.h>
 
@@ -112,7 +111,6 @@ double CpuSolver::vcycle(CpuGridData& grid)
 void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxiter)
 {	
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
-	const double alpha = 1.0 / level.stencil.values[0]; // stencil center
 	const double preFac = level.stencil.values[0] / (level.h * level.h);
 
 	for (std::size_t i = 0; i < maxiter; i++) {
