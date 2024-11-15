@@ -23,9 +23,6 @@ struct Stencil {
         assert(i < offsets.size());
         return std::get<2>(offsets[i]);
     }
-
-    //static Stencil galerkin(const Stencil& prevStencil);
-    static Stencil simpleStencil(const Stencil& rootStencil, std::size_t level);
 };
 
 struct GridParams {

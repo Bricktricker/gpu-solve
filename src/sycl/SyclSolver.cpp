@@ -157,7 +157,7 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
 void SyclSolver::jacobi(queue& queue, SyclGridData& grid, std::size_t levelNum, std::size_t maxiter)
 {
     SyclGridData::LevelData& level = grid.getLevel(levelNum);
-    const double preFac = level.stencil.values[0] / (level.h * level.h);
+    const double preFac = grid.stencil.values[0] / (level.h * level.h);
 
     for (std::size_t i = 0; i < maxiter; i++) {
         compResidual(queue, grid, levelNum);
@@ -190,7 +190,7 @@ void SyclSolver::compResidual(queue& queue, SyclGridData& grid, std::size_t leve
         auto vAcc = level.v.get_access<access::mode::read>(cgh);
         auto rAcc = level.r.get_access<access::mode::write>(cgh);
 
-        cgh.parallel_for<class residual>(range, [=, dims=level.v.getDims(), stencil=level.stencil](id<3> index) {
+        cgh.parallel_for<class residual>(range, [=, dims=level.v.getDims(), stencil=grid.stencil](id<3> index) {
             double1 stencilsum = 0.0;
             for (std::size_t i = 0; i < stencil.values.size(); i++) {
                 const int1 flatIdx = Sycl3dAccesor::flatIndex(dims, index[0] + (stencil.getXOffset(i) + 1), index[1] + (stencil.getYOffset(i) + 1), index[2] + (stencil.getZOffset(i) + 1));
@@ -226,7 +226,7 @@ void SyclSolver::applyStencil(cl::sycl::queue& queue, SyclGridData& grid, std::s
         auto vAcc = v.get_access<access::mode::read>(cgh);
         auto resultAcc = result.get_access<access::mode::write>(cgh);
 
-        cgh.parallel_for<class apply>(range, [=, dims=v.getDims(), stencil=level.stencil](id<3> index) {
+        cgh.parallel_for<class apply>(range, [=, dims=v.getDims(), stencil=grid.stencil](id<3> index) {
             
             double1 stencilsum = 0.0;
             for (std::size_t i = 0; i < stencil.values.size(); i++) {

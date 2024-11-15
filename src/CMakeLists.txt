@@ -1,4 +1,4 @@
-set(BASE_CPP_FILES "main.cpp" "cpu/Vector3.cpp" "Stencil.cpp" "Timer.cpp")
+set(BASE_CPP_FILES "main.cpp" "cpu/Vector3.cpp" "Timer.cpp")
 set(BASE_SYCL_FILES ${BASE_CPP_FILES} "sycl/SyclGridData.cpp" "sycl/SyclSolver.cpp")
 
 add_executable(GpuSolve-cpu ${BASE_CPP_FILES} "cpu/CpuGridData.cpp" "cpu/CpuSolver.cpp")

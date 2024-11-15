@@ -15,15 +15,12 @@ SyclGridData::SyclGridData(const GridParams& grid)
 
 	for (std::size_t i = 0; i < maxlevel; i++) {
 		std::array<std::size_t, 3> levelDim;
-		Stencil levelStencil;
 		if (i == 0) {
 			levelDim = gridDim;
-			levelStencil = stencil;
 		}else {
 			levelDim[0] = levels[i - 1].levelDim[0] / 2;
 			levelDim[1] = levels[i - 1].levelDim[1] / 2;
 			levelDim[2] = levels[i - 1].levelDim[2] / 2;
-			levelStencil = this->stencil;
 		}
 
 		double h;
@@ -40,7 +37,6 @@ SyclGridData::SyclGridData(const GridParams& grid)
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			levelDim,
-			levelStencil,
 			h
 		});
 

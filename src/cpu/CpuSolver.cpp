@@ -34,9 +34,9 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 			for (std::size_t z = 1; z < level.levelDim[2]+1; z++) {
 				
 				double stencilsum = 0.0;
-				for (std::size_t i = 0; i < level.stencil.values.size(); i++) {
-					double vVal = level.v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
-					stencilsum += level.stencil.values[i] * vVal;
+				for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
+					double vVal = level.v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
+					stencilsum += grid.stencil.values[i] * vVal;
 				}
 				stencilsum /= level.h * level.h;
 
@@ -111,7 +111,7 @@ double CpuSolver::vcycle(CpuGridData& grid)
 void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxiter)
 {	
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
-	const double preFac = level.stencil.values[0] / (level.h * level.h);
+	const double preFac = grid.stencil.values[0] / (level.h * level.h);
 
 	for (std::size_t i = 0; i < maxiter; i++) {
 		if(grid.periodic) updateGhosts(level.v);
@@ -146,9 +146,9 @@ void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vect
 			for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
 
 				double stencilsum = 0.0;
-				for (std::size_t i = 0; i < level.stencil.values.size(); i++) {
-					double vVal = v.get(x + level.stencil.getXOffset(i), y + level.stencil.getYOffset(i), z + level.stencil.getZOffset(i));
-					stencilsum += level.stencil.values[i] * vVal;
+				for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
+					double vVal = v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
+					stencilsum += grid.stencil.values[i] * vVal;
 				}
 				stencilsum /= level.h * level.h;
 				// See tutorial_multigrid.pdf, page 102, Formula 6.13

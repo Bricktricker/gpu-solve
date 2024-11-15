@@ -19,12 +19,10 @@ CpuGridData::CpuGridData(const GridParams& grid)
 		auto& level = levels[i];
 		if (i == 0) {
 			level.levelDim = gridDim;
-			level.stencil = stencil;
 		}else {
 			level.levelDim[0] = levels[i - 1].levelDim[0] / 2;
 			level.levelDim[1] = levels[i - 1].levelDim[1] / 2;
 			level.levelDim[2] = levels[i - 1].levelDim[2] / 2;
-			level.stencil = this->stencil;
 		}
 
 		level.v = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
