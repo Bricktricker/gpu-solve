@@ -9,6 +9,7 @@
 #include "SYCL/handler_event.h"
 #include "SYCL/program.h"
 #include "SYCL/ranges.h"
+#include "../../../../src/Timer.h"
 #include <unordered_map>
 
 namespace cl {
@@ -60,8 +61,10 @@ class handler {
       return kern;
     }
 
+    Timer::push("compile");
     program prog(get_context(q));
     prog.build(kernFunctor, "");
+    Timer::pop("compile");
 
     cl_kernel final_kernel = prog.kernels.begin()->second->get();
     prog.kernels.begin()->second->kern.call_retain(final_kernel);

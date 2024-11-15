@@ -78,13 +78,15 @@ void SyclSolver::solve(SyclGridData& grid)
         auto start = std::chrono::high_resolution_clock::now();
 
         for (std::size_t i = 0; i < grid.maxiter; i++) {
+            Timer::start();
             double res = vcycle(queue, grid);
 
             const auto end = std::chrono::high_resolution_clock::now();
             const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
             start = end;
 
-            std::cout << "iter: " << i << " residual: " << res << " took " << time << "ms\n";
+            std::cout << "iter: " << i << " residual: " << res << ' ';
+            Timer::stop();
         }
 
     }
