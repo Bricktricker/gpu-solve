@@ -49,7 +49,7 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 		auto wAccessor = levels[0].f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 		cl::sycl::range<3> range(levels[0].levelDim[0] + 2, levels[0].levelDim[1] + 2, levels[0].levelDim[2] + 2);
 
-		cgh.parallel_for<class init_f>(range, [=, h=this->h, dims = levels[0].f.getDims()](cl::sycl::id<3> index) {
+		cgh.parallel_for<class init_f>(range, [=, h=this->h, gamma=this->gamma, dims=levels[0].f.getDims()](cl::sycl::id<3> index) {
 			double1 x = index[0] * h;
 			double1 y = index[1] * h;
 			double1 z = index[2] * h;

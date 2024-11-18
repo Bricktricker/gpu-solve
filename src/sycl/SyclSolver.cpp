@@ -132,7 +132,7 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
         queue.submit([&](handler& cgh) {
             auto vAcc = thisLevel.v.get_access<access::mode::read_write>(cgh);
             auto restvAcc = thisLevel.restV.get_access<access::mode::read>(cgh);
-            cgh.parallel_for<class sum>(range<1>(thisLevel.v.flatSize()), [=](id<1> index) {
+            cgh.parallel_for<class sum1>(range<1>(thisLevel.v.flatSize()), [=](id<1> index) {
                 vAcc[index] -= restvAcc[index];
             });
         });
@@ -144,7 +144,7 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
         queue.submit([&](handler& cgh) {
             auto vAcc = prevLevel.v.get_access<access::mode::read_write>(cgh);
             auto eAcc = prevLevel.e.get_access<access::mode::read>(cgh);
-            cgh.parallel_for<class sum>(range<1>(prevLevel.v.flatSize()), [=](id<1> index) {
+            cgh.parallel_for<class sum2>(range<1>(prevLevel.v.flatSize()), [=](id<1> index) {
                 vAcc[index] += eAcc[index];
             });
         });
@@ -168,12 +168,12 @@ void SyclSolver::jacobi(queue& queue, SyclGridData& grid, std::size_t levelNum, 
             auto vAcc = level.v.get_access<access::mode::read_write>(cgh);
             auto rAcc = level.r.get_access<access::mode::read>(cgh);
 
-            cgh.parallel_for<class jacobiK>(range<1>(level.v.flatSize()), [=, omega=grid.omega](id<1> idx) {
+            cgh.parallel_for<class jacobiK>(range<1>(level.v.flatSize()), [=, omega=grid.omega, gamma=grid.gamma](id<1> idx) {
                 double1 vVal = vAcc[idx[0]];
                 double1 ex = cl::sycl::exp(vVal);
-                double1 denuminator = preFac + grid.gamma * (1 + vVal) * ex;
+                double1 denuminator = preFac + gamma * (1 + vVal) * ex;
 
-                double1 newV = vVal + grid.omega * (rAcc[idx[0]] / denuminator);
+                double1 newV = vVal + omega * (rAcc[idx[0]] / denuminator);
                 vAcc[idx[0]] = newV;
             });
         });
@@ -192,21 +192,21 @@ void SyclSolver::compResidual(queue& queue, SyclGridData& grid, std::size_t leve
         auto vAcc = level.v.get_access<access::mode::read>(cgh);
         auto rAcc = level.r.get_access<access::mode::write>(cgh);
 
-        cgh.parallel_for<class residual>(range, [=, dims=level.v.getDims(), stencil=grid.stencil](id<3> index) {
+        cgh.parallel_for<class residual>(range, [=, h=level.h, gamma=grid.gamma, dims=level.v.getDims(), stencil=grid.stencil](id<3> index) {
             double1 stencilsum = 0.0;
             for (std::size_t i = 0; i < stencil.values.size(); i++) {
                 const int1 flatIdx = Sycl3dAccesor::flatIndex(dims, index[0] + (stencil.getXOffset(i) + 1), index[1] + (stencil.getYOffset(i) + 1), index[2] + (stencil.getZOffset(i) + 1));
                 auto vVal = vAcc[flatIdx];
                 stencilsum += stencil.values[i] * vVal;
             }
-            stencilsum /= level.h * level.h;
+            stencilsum /= h * h;
 
             int1 centerIdx = Sycl3dAccesor::shift1Index(dims, index);
 
             // See tutorial_multigrid.pdf, page 102, Formula 6.13
             double1 vVal = vAcc[centerIdx];
             double1 ex = cl::sycl::exp(vVal);
-            double1 nonLinear = grid.gamma * vVal * ex;
+            double1 nonLinear = gamma * vVal * ex;
             stencilsum += nonLinear;
 
             rAcc[centerIdx] = fAcc[centerIdx] - stencilsum;
@@ -228,7 +228,7 @@ void SyclSolver::applyStencil(cl::sycl::queue& queue, SyclGridData& grid, std::s
         auto vAcc = v.get_access<access::mode::read>(cgh);
         auto resultAcc = result.get_access<access::mode::write>(cgh);
 
-        cgh.parallel_for<class apply>(range, [=, dims=v.getDims(), stencil=grid.stencil](id<3> index) {
+        cgh.parallel_for<class apply>(range, [=, h=level.h, dims=v.getDims(), stencil=grid.stencil, gamma=grid.gamma](id<3> index) {
             
             double1 stencilsum = 0.0;
             for (std::size_t i = 0; i < stencil.values.size(); i++) {
@@ -236,14 +236,14 @@ void SyclSolver::applyStencil(cl::sycl::queue& queue, SyclGridData& grid, std::s
                 auto vVal = vAcc[flatIdx];
                 stencilsum += stencil.values[i] * vVal;
             }
-            stencilsum /= level.h * level.h;
+            stencilsum /= h * h;
 
             int1 centerIdx = Sycl3dAccesor::shift1Index(dims, index);
 
             // See tutorial_multigrid.pdf, page 102, Formula 6.13
             double1 vVal = vAcc[centerIdx];
             double1 ex = cl::sycl::exp(vVal);
-            double1 nonLinear = grid.gamma * vVal * ex;
+            double1 nonLinear = gamma * vVal * ex;
             stencilsum += nonLinear;
 
             resultAcc[centerIdx] = stencilsum;
