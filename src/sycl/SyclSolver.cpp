@@ -5,6 +5,8 @@
 #include <string>
 #include <fstream>
 
+#define GPUSOLVE_WORK_GROUP_SIZE 32
+
 using namespace cl::sycl;
 
 #ifndef SYCL_GTX_TARGET
@@ -71,6 +73,9 @@ void SyclSolver::solve(SyclGridData& grid)
     const auto devices = P.get_devices(info::device_type::all);
     const device& D = devices.at(deviceIdx);
     std::cout << "Device: " << D.get_info<info::device::name>() << '\n';
+
+    const size_t maxWorkGroupSize = D.get_info<cl::sycl::info::device::max_work_group_size>();
+    std::cout << "Max work group size " << maxWorkGroupSize << '\n';
 
     context C(D);
     
@@ -157,8 +162,17 @@ void SyclSolver::jacobi(queue& queue, SyclGridData& grid, std::size_t levelNum, 
             auto vAcc = level.v.get_access<access::mode::read_write>(cgh);
             auto rAcc = level.r.get_access<access::mode::read>(cgh);
 
-            cgh.parallel_for<class jacobiK>(range<1>(level.v.flatSize()), [=, omega=grid.omega](id<1> idx) {
-                vAcc[idx[0]] += omega * (alpha * rAcc[idx[0]]);
+            constexpr std::size_t work_group_size = GPUSOLVE_WORK_GROUP_SIZE;
+            const std::size_t global_work_items = level.v.flatSize();
+            const std::size_t num_work_items = (global_work_items + work_group_size - 1); // ceil(global_work_items / work_group_size)
+            const nd_range<1> nd_range(num_work_items, work_group_size);
+
+            cgh.parallel_for<class jacobiK>(nd_range, [=, omega = grid.omega](nd_item<1> index) {
+                const int1 flatCenterIdx = index.get_global_id();
+                SYCL_IF(flatCenterIdx < global_work_items) {
+                    vAcc[flatCenterIdx] += omega * (alpha * rAcc[flatCenterIdx]);
+                }
+                SYCL_END;
             });
         });
     }
@@ -174,7 +188,7 @@ void SyclSolver::compResidual(queue& queue, SyclGridData& grid, std::size_t leve
         auto vAcc = level.v.get_access<access::mode::read>(cgh);
         auto rAcc = level.r.get_access<access::mode::write>(cgh);
 
-        constexpr std::size_t work_group_size = 32;
+        constexpr std::size_t work_group_size = GPUSOLVE_WORK_GROUP_SIZE;
         const std::size_t global_work_items = level.levelDim[0] * level.levelDim[1] * level.levelDim[2];
         const std::size_t num_work_items = (global_work_items + work_group_size - 1); // ceil(global_work_items / work_group_size)
         const nd_range<1> nd_range(num_work_items, work_group_size);
