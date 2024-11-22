@@ -178,10 +178,6 @@ class vec<dataT, 1> : public detail::vectors::base<dataT, 1>,
   vec(data_ref&& move) : Base(std::move(move.name), true), Members(this) {}
   ~vec() = default;
 
-  static vec create_var(const vec& copy) {
-    return copy;
-  }
-
   vec(const dataT& n)
       : Base(detail::get_string<dataT>::get(n), true), Members(this) {}
 

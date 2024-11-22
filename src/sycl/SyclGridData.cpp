@@ -56,37 +56,27 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 		auto wAccessor = levels[0].f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 		cl::sycl::range<3> range(levels[0].levelDim[0] + 2, levels[0].levelDim[1] + 2, levels[0].levelDim[2] + 2);
 
-		constexpr std::size_t work_group_size = 32;
-		const std::size_t global_work_items = range.size();
-		const std::size_t num_work_items = (global_work_items + work_group_size - 1); // ceil(global_work_items / work_group_size)
-		cl::sycl::nd_range<1> nd_range(num_work_items, work_group_size);
-
 		const auto xRightSide = levels[0].levelDim[0] + 1;
 		const auto yRightSide = levels[0].levelDim[1] + 1;
 		const auto zRightSide = levels[0].levelDim[2] + 1;
 
-		cgh.parallel_for<class init_ff>(nd_range, [=, h=this->h, dims=levels[0].f.getDims()](cl::sycl::nd_item<1> index) {
-			int1 flatIndex = index.get_global_id();
-			SYCL_IF(flatIndex < global_work_items) {
-				const int3 cubeIndex = Sycl3dAccesor::cubeIndex(dims, flatIndex);
+		cgh.parallel_for<class init_f>(range, [=, h=this->h, dims = levels[0].f.getDims()](cl::sycl::id<3> index) {
+			int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
+			SYCL_IF(index[0] == 0 || index[1] == 0 || index[2] == 0) {
+				wAccessor[flatIndex] = 0.0;
+			}
+			SYCL_ELSE_IF(index[0] == xRightSide || index[1] == yRightSide || index[2] == zRightSide) {
+				wAccessor[flatIndex] = 0.0;
+			}
+			SYCL_ELSE
+			{
+				double1 x = (index[0] - 1) * h;
+				double1 y = (index[1] - 1) * h;
+				double1 z = (index[2] - 1) * h;
 
-				SYCL_IF(cubeIndex.x() == 0 || cubeIndex.y() == 0 || cubeIndex.z() == 0) {
-					wAccessor[flatIndex] = 0.0;
-				}
-				SYCL_ELSE_IF(cubeIndex.x() == xRightSide || cubeIndex.y() == yRightSide || cubeIndex.z() == zRightSide) {
-					wAccessor[flatIndex] = 0.0;
-				}
-				SYCL_ELSE
-				{
-					double1 x = (cubeIndex.x() - 1) * h;
-					double1 y = (cubeIndex.y() - 1) * h;
-					double1 z = (cubeIndex.z() - 1) * h;
+				double1 val = (-h * h) * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
 
-					double1 val = (-h * h) * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
-
-					wAccessor[flatIndex] = val;
-				}
-				SYCL_END;
+				wAccessor[flatIndex] = val;
 			}
 			SYCL_END;
 		});
