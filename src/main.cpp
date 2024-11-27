@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
         configFile >> gridParams.gridDim[0];
         configFile >> gridParams.gridDim[1];
         configFile >> gridParams.gridDim[2];
-        configFile >> gridParams.periodic;
+        configFile >> gridParams.isLinear;
         configFile >> gridParams.preSmoothing;
         configFile >> gridParams.postSmoothing;
         configFile >> gridParams.omega;
@@ -59,12 +59,7 @@ int main(int argc, char* argv[]) {
             std::get<2>(gridParams.stencil.offsets[i]) = val;
         }
 
-        if (gridParams.periodic) {
-            gridParams.h = 1.0 / gridParams.gridDim[1];
-        }else {
-            gridParams.h = 1.0 / (gridParams.gridDim[1]+1);
-        }
-
+        gridParams.h = 1.0 / (gridParams.gridDim[1] + 1);
     }
 
 #ifdef GPUSOLVE_CPU

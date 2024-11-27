@@ -35,5 +35,5 @@ struct GridParams {
     std::size_t preSmoothing;
     std::size_t postSmoothing;
     Stencil stencil{};
-    bool periodic;
+    bool isLinear;
 };

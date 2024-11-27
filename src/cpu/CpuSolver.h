@@ -13,5 +13,4 @@ private:
 	static void applyStencil(CpuGridData& grid, std::size_t level, const Vector3& v);
 	static void restrict(const Vector3& src, Vector3& dst);
 	static void interpolate(CpuGridData& grid, std::size_t level);
-	static void updateGhosts(Vector3& vec);
 };

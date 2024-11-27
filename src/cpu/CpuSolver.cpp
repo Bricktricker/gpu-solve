@@ -7,7 +7,6 @@
 void CpuSolver::solve(CpuGridData& grid)
 {
 	// Compute inital residual
-	// TODO: if(grid.periodic) { updateResidual(f & v) }, needed?
 	double initialResidual = compResidual(grid, 0);
 	std::cout << "Inital residual: " << initialResidual << '\n';
 
@@ -38,12 +37,15 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 					double vVal = level.v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
 					stencilsum += grid.stencil.values[i] * vVal;
 				}
-				stencilsum /= level.h * level.h;
 
-				// See tutorial_multigrid.pdf, page 102, Formula 6.13
-				double ex = exp(level.v.get(x, y, z));
-				double nonLinear = grid.gamma * level.v.get(x, y, z) * ex;
-				stencilsum += nonLinear;
+				if (!grid.isLinear) {
+					stencilsum /= level.h * level.h;
+
+					// See tutorial_multigrid.pdf, page 102, Formula 6.13
+					double ex = exp(level.v.get(x, y, z));
+					double nonLinear = grid.gamma * level.v.get(x, y, z) * ex;
+					stencilsum += nonLinear;
+				}
 
 				double r = level.f.get(x, y, z) - stencilsum;
 				level.r.set(x, y, z, r);
@@ -65,34 +67,37 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		// compute residual
 		compResidual(grid, i);
 		Vector3& r = grid.getLevel(i).r;
-		if (grid.periodic) updateGhosts(r);
-
-		// See tutorial_multigrid.pdf, page 98, Full Approximation Scheme (FAS)
 
 		// restrict residual to next level f
 		// f^2h = r^2h
 		restrict(r, nextLevel.f);
 
-		// restrict v^h to next level v^2h
-		restrict(grid.getLevel(i).v, nextLevel.restV);
-		restrict(grid.getLevel(i).v, nextLevel.v);
-		
-		// Compute A^2h (v^2h) and store it in r
-		applyStencil(grid, i + 1, nextLevel.restV);
-		// Add A^2h (v^2h) to r^2h
-		nextLevel.f += nextLevel.r;
+		if (grid.isLinear) {
+			nextLevel.v.fill(0.0);
+		}else {
+			// See tutorial_multigrid.pdf, page 98, Full Approximation Scheme (FAS)
 
-		if (grid.periodic) updateGhosts(nextLevel.f);
+			// restrict v^h to next level v^2h
+			restrict(grid.getLevel(i).v, nextLevel.restV);
+			restrict(grid.getLevel(i).v, nextLevel.v);
+
+			// Compute A^2h (v^2h) and store it in r
+			applyStencil(grid, i + 1, nextLevel.restV);
+			// Add A^2h (v^2h) to r^2h
+			nextLevel.f += nextLevel.r;
+		}
 	}
 	
 	// reached coarsed level, solve now
 	jacobi(grid, grid.numLevels() - 1, grid.preSmoothing+grid.postSmoothing);
 
 	for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
-		CpuGridData::LevelData& level = grid.getLevel(i);
 		
-		// compute u^2h = u^2h - v^2h
-		level.v -= level.restV;
+		if (!grid.isLinear) {
+			CpuGridData::LevelData& level = grid.getLevel(i);
+			// compute u^2h = u^2h - v^2h
+			level.v -= level.restV;
+		}
 
 		// interpolate v^2h to previos level e^h
 		interpolate(grid, i - 1);
@@ -112,29 +117,35 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 {	
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 	const double preFac = grid.stencil.values[0] / (level.h * level.h);
+	const double alpha = 1.0 / grid.stencil.values[0]; // stencil center
 
 	for (std::size_t i = 0; i < maxiter; i++) {
-		if(grid.periodic) updateGhosts(level.v);
 		
 		compResidual(grid, levelNum);
 		
 		for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
 			for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
 				for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
-					// See tutorial_multigrid.pdf, page 103, Formula 6.14
-					double ex = exp(level.v.get(x, y, z));
-					double denuminator = preFac + grid.gamma * (1 + level.v.get(x, y, z)) * ex;
 
-					double newV = level.v.get(x, y, z) + grid.omega * (level.r.get(x, y, z) / denuminator);
+					double newV;
+					if (grid.isLinear) {
+						newV = level.v.get(x, y, z) + grid.omega * (alpha * level.r.get(x, y, z));
+					}else {
+						// See tutorial_multigrid.pdf, page 103, Formula 6.14
+						double ex = exp(level.v.get(x, y, z));
+						double denuminator = preFac + grid.gamma * (1 + level.v.get(x, y, z)) * ex;
+
+						newV = level.v.get(x, y, z) + grid.omega * (level.r.get(x, y, z) / denuminator);
+					}
+
 					level.v.set(x, y, z, newV);
 				}
 			}
 		}
 	}
-
-	if (grid.periodic) updateGhosts(level.v);
 }
 
+// Only needed for non-linear code
 void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vector3& v)
 {
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
@@ -203,10 +214,6 @@ void CpuSolver::interpolate(CpuGridData& grid, std::size_t level)
 		}
 	}
 
-	if (grid.periodic) {
-		updateGhosts(fine);
-	}
-
 	// Interpolate in x-direction
 	for (std::size_t x = 0; x+2 < fine.getXdim(); x += 2) {
 		for (std::size_t y = 0; y < fine.getYdim(); y += 2) {
@@ -236,38 +243,5 @@ void CpuSolver::interpolate(CpuGridData& grid, std::size_t level)
 			}
 		}
 	}
-
-	if (grid.periodic) {
-		updateGhosts(fine);
-	}
 }
 
-void CpuSolver::updateGhosts(Vector3& vec)
-{
-	// must only be called when grid is periodic
-
-	// z-dimension
-	for (std::size_t x = 0; x < vec.getXdim(); x++) {
-		for (std::size_t y = 0; y < vec.getYdim(); y++) {
-			vec.set(x, y, 0, vec.get(x, y, vec.getZdim()-2));
-			vec.set(x, y, vec.getZdim()-1, vec.get(x, y, 1));
-		}
-	}
-
-	// y-dimension
-	for (std::size_t x = 0; x < vec.getXdim(); x++) {
-		for (std::size_t z = 0; z < vec.getZdim(); z++) {
-			vec.set(x, 0, z, vec.get(x, vec.getYdim()-2, z));
-			vec.set(x, vec.getYdim() - 1, z, vec.get(x, 1, z));
-		}
-	}
-
-	// x-dimension
-	for (std::size_t y = 0; y < vec.getYdim(); y++) {
-		for (std::size_t z = 0; z < vec.getZdim(); z++) {
-			vec.set(0, y, z, vec.get(vec.getXdim()-2, y, z));
-			vec.set(vec.getXdim() - 1, y, z, vec.get(1, y, z));
-		}
-	}
-
-}
