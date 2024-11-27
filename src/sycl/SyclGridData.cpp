@@ -54,7 +54,7 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 			const auto yRightSide = levels[0].levelDim[1] + 1;
 			const auto zRightSide = levels[0].levelDim[2] + 1;
 
-			cgh.parallel_for<class init_f>(range, [=, h = this->h, dims = levels[0].f.getDims()](cl::sycl::id<3> index) {
+			cgh.parallel_for<class init_f_lin>(range, [=, h = this->h, dims = levels[0].f.getDims()](cl::sycl::id<3> index) {
 				int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
 				SYCL_IF(index[0] == 0 || index[1] == 0 || index[2] == 0) {
 					wAccessor[flatIndex] = 0.0;
