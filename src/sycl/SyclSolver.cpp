@@ -75,15 +75,9 @@ void SyclSolver::solve(SyclGridData& grid)
         double resInital = sumResidual(queue, grid, 0);
         std::cout << "Inital residual: " << resInital << '\n';
 
-        auto start = std::chrono::high_resolution_clock::now();
-
         for (std::size_t i = 0; i < grid.maxiter; i++) {
             Timer::start();
             double res = vcycle(queue, grid);
-
-            const auto end = std::chrono::high_resolution_clock::now();
-            const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-            start = end;
 
             std::cout << "iter: " << i << " residual: " << res << ' ';
             Timer::stop();
@@ -106,20 +100,32 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
         // restrict residual to next level f
         restrict(queue, grid.getLevel(i).r, nextLevel.f);
 
-        restrict(queue, grid.getLevel(i).v, nextLevel.restV);
-        restrict(queue, grid.getLevel(i).v, nextLevel.v);
+        if (grid.isLinear) {
 
-        // Compute A^2h (v^2h), and save it in r, so we don't need a new buffer for it
-        applyStencil(queue, grid, i + 1, nextLevel.restV);
-
-        // Add A^2h (v^2h) to r^2h
-        queue.submit([&](handler& cgh) {
-            auto fAcc = nextLevel.f.get_access<access::mode::read_write>(cgh);
-            auto rAcc = nextLevel.r.get_access<access::mode::read>(cgh);
-            cgh.parallel_for<class sum>(range<1>(nextLevel.f.flatSize()), [=](id<1> index) {
-                fAcc[index] += rAcc[index];
+            // clear v for next level
+            queue.submit([&](handler& cgh) {
+                auto vAcc = nextLevel.v.get_access<access::mode::discard_write>(cgh);
+                cgh.parallel_for<class reset>(range<1>(nextLevel.v.flatSize()), [=](id<1> index) {
+                    vAcc[index] = 0.0;
+                });
             });
-        });
+
+        }else {
+            restrict(queue, grid.getLevel(i).v, nextLevel.restV);
+            restrict(queue, grid.getLevel(i).v, nextLevel.v);
+
+            // Compute A^2h (v^2h), and save it in r, so we don't need a new buffer for it
+            applyStencil(queue, grid, i + 1, nextLevel.restV);
+
+            // Add A^2h (v^2h) to r^2h
+            queue.submit([&](handler& cgh) {
+                auto fAcc = nextLevel.f.get_access<access::mode::read_write>(cgh);
+                auto rAcc = nextLevel.r.get_access<access::mode::read>(cgh);
+                cgh.parallel_for<class sum>(range<1>(nextLevel.f.flatSize()), [=](id<1> index) {
+                    fAcc[index] += rAcc[index];
+                });
+            });
+        }
     }
 
     jacobi(queue, grid, grid.numLevels() - 1, grid.preSmoothing + grid.postSmoothing);
@@ -128,14 +134,16 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
         SyclGridData::LevelData& thisLevel = grid.getLevel(i);
         SyclGridData::LevelData& prevLevel = grid.getLevel(i - 1);
 
-        // compute u^2h = u^2h - v^2h
-        queue.submit([&](handler& cgh) {
-            auto vAcc = thisLevel.v.get_access<access::mode::read_write>(cgh);
-            auto restvAcc = thisLevel.restV.get_access<access::mode::read>(cgh);
-            cgh.parallel_for<class sum1>(range<1>(thisLevel.v.flatSize()), [=](id<1> index) {
-                vAcc[index] -= restvAcc[index];
+        if (!grid.isLinear) {
+            // compute u^2h = u^2h - v^2h
+            queue.submit([&](handler& cgh) {
+                auto vAcc = thisLevel.v.get_access<access::mode::read_write>(cgh);
+                auto restvAcc = thisLevel.restV.get_access<access::mode::read>(cgh);
+                cgh.parallel_for<class sum1>(range<1>(thisLevel.v.flatSize()), [=](id<1> index) {
+                    vAcc[index] -= restvAcc[index];
+                });
             });
-        });
+        }
 
         // interpolate v to previous level e
         interpolate(queue, prevLevel.e, thisLevel.v);
@@ -160,6 +168,7 @@ void SyclSolver::jacobi(queue& queue, SyclGridData& grid, std::size_t levelNum, 
 {
     SyclGridData::LevelData& level = grid.getLevel(levelNum);
     const double preFac = grid.stencil.values[0] / (level.h * level.h);
+    const double alpha = 1.0 / grid.stencil.values[0]; // stencil center
 
     for (std::size_t i = 0; i < maxiter; i++) {
         compResidual(queue, grid, levelNum);
@@ -168,12 +177,19 @@ void SyclSolver::jacobi(queue& queue, SyclGridData& grid, std::size_t levelNum, 
             auto vAcc = level.v.get_access<access::mode::read_write>(cgh);
             auto rAcc = level.r.get_access<access::mode::read>(cgh);
 
-            cgh.parallel_for<class jacobiK>(range<1>(level.v.flatSize()), [=, omega=grid.omega, gamma=grid.gamma](id<1> idx) {
+            cgh.parallel_for<class jacobiK>(range<1>(level.v.flatSize()), [=, omega=grid.omega, gamma=grid.gamma, isLinear=grid.isLinear](id<1> idx) {
                 double1 vVal = vAcc[idx[0]];
-                double1 ex = cl::sycl::exp(vVal);
-                double1 denuminator = preFac + gamma * (1 + vVal) * ex;
 
-                double1 newV = vVal + omega * (rAcc[idx[0]] / denuminator);
+                double1 newV;
+                if (isLinear) {
+                    newV = vVal + omega * (alpha * rAcc[idx[0]]);
+                }else {
+                    double1 ex = cl::sycl::exp(vVal);
+                    double1 denuminator = preFac + gamma * (1 + vVal) * ex;
+
+                    newV = vVal + omega * (rAcc[idx[0]] / denuminator);
+                }
+
                 vAcc[idx[0]] = newV;
             });
         });
@@ -192,29 +208,31 @@ void SyclSolver::compResidual(queue& queue, SyclGridData& grid, std::size_t leve
         auto vAcc = level.v.get_access<access::mode::read>(cgh);
         auto rAcc = level.r.get_access<access::mode::write>(cgh);
 
-        cgh.parallel_for<class residual>(range, [=, h=level.h, gamma=grid.gamma, dims=level.v.getDims(), stencil=grid.stencil](id<3> index) {
+        cgh.parallel_for<class residual>(range, [=, h=level.h, gamma=grid.gamma, isLinear=grid.isLinear, dims=level.v.getDims(), stencil=grid.stencil](id<3> index) {
             double1 stencilsum = 0.0;
             for (std::size_t i = 0; i < stencil.values.size(); i++) {
                 const int1 flatIdx = Sycl3dAccesor::flatIndex(dims, index[0] + (stencil.getXOffset(i) + 1), index[1] + (stencil.getYOffset(i) + 1), index[2] + (stencil.getZOffset(i) + 1));
                 auto vVal = vAcc[flatIdx];
                 stencilsum += stencil.values[i] * vVal;
             }
-            stencilsum /= h * h;
 
             int1 centerIdx = Sycl3dAccesor::shift1Index(dims, index);
 
-            // See tutorial_multigrid.pdf, page 102, Formula 6.13
-            double1 vVal = vAcc[centerIdx];
-            double1 ex = cl::sycl::exp(vVal);
-            double1 nonLinear = gamma * vVal * ex;
-            stencilsum += nonLinear;
+            if (!isLinear) {
+                stencilsum /= h * h;
+                // See tutorial_multigrid.pdf, page 102, Formula 6.13
+                double1 vVal = vAcc[centerIdx];
+                double1 ex = cl::sycl::exp(vVal);
+                double1 nonLinear = gamma * vVal * ex;
+                stencilsum += nonLinear;
+            }
 
             rAcc[centerIdx] = fAcc[centerIdx] - stencilsum;
         });
     });
 }
 
-// save result in 'r'
+// save result in 'r'. Only needed for non-linear
 void SyclSolver::applyStencil(cl::sycl::queue& queue, SyclGridData& grid, std::size_t levelNum, SyclBuffer& v)
 {
     SyclGridData::LevelData& level = grid.getLevel(levelNum);

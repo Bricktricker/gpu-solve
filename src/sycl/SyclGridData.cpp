@@ -1,16 +1,21 @@
 #include "SyclGridData.h"
 
+namespace {
+	template<class Float>
+	Float f0(const Float& x) {
+		return (100 * x * (x - 1.0) * x * (x - 1.0) * x * (x - 1.0) * x * (x - 1.0));
+	}
+	template<class Float>
+	Float f2(const Float& x) {
+		return (100.0 * 4.0 * (x - 1.0) * (x - 1.0) * x * x * (14.0 * x * x - 14.0 * x + 3));
+	}
+}
+
 SyclGridData::SyclGridData(const GridParams& grid)
 	: GridParams(grid)
 {
-	int maxlevel;
 	// magic 2.0 at the end is the coarsening ratio
-	if (periodic) {
-		maxlevel = (int)floor(log((double)(std::min(std::min(gridDim[0], gridDim[1]), gridDim[2]) + 1)) / log(2.0)) + 1;
-	}
-	else {
-		maxlevel = (int)floor(log((double)std::min(std::min(gridDim[0], gridDim[1]), gridDim[2])) / log(2.0)) + 1;
-	}
+	int maxlevel = (int)floor(log((double)std::min(std::min(gridDim[0], gridDim[1]), gridDim[2])) / log(2.0)) + 1;
 	levels.reserve(maxlevel);
 
 	for (std::size_t i = 0; i < maxlevel; i++) {
@@ -23,12 +28,7 @@ SyclGridData::SyclGridData(const GridParams& grid)
 			levelDim[2] = levels[i - 1].levelDim[2] / 2;
 		}
 
-		double h;
-		if (grid.periodic) {
-			h = 1.0 / levelDim[1];
-		}else {
-			h = 1.0 / (levelDim[1] + 1);
-		}
+		double h = 1.0 / (levelDim[1] + 1);
 
 		levels.push_back(LevelData{
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
@@ -49,18 +49,45 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 		auto wAccessor = levels[0].f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 		cl::sycl::range<3> range(levels[0].levelDim[0] + 2, levels[0].levelDim[1] + 2, levels[0].levelDim[2] + 2);
 
-		cgh.parallel_for<class init_f>(range, [=, h=this->h, ga=gamma, dims=levels[0].f.getDims()](cl::sycl::id<3> index) {
-			double1 x = index[0] * h;
-			double1 y = index[1] * h;
-			double1 z = index[2] * h;
+		if (this->isLinear) {
+			const auto xRightSide = levels[0].levelDim[0] + 1;
+			const auto yRightSide = levels[0].levelDim[1] + 1;
+			const auto zRightSide = levels[0].levelDim[2] + 1;
 
-			double1 val = 2.0 * ((y - y * y) * (z - z * z) + (x - x * x) * (z - z * z) + (x - x * x) * (y - y * y))
-				+ ga * (x - x * x) * (y - y * y) * (z - z * z)
-				* cl::sycl::exp((x - x * x) * (y - y * y) * (z - z * z));
+			cgh.parallel_for<class init_f>(range, [=, h = this->h, dims = levels[0].f.getDims()](cl::sycl::id<3> index) {
+				int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
+				SYCL_IF(index[0] == 0 || index[1] == 0 || index[2] == 0) {
+					wAccessor[flatIndex] = 0.0;
+				}
+				SYCL_ELSE_IF(index[0] == xRightSide || index[1] == yRightSide || index[2] == zRightSide) {
+					wAccessor[flatIndex] = 0.0;
+				}
+				SYCL_ELSE
+				{
+					double1 x = (index[0] - 1) * h;
+					double1 y = (index[1] - 1) * h;
+					double1 z = (index[2] - 1) * h;
 
-			int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
-			wAccessor[flatIndex] = val;
-		});
+					double1 val = (-h * h) * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
+
+					wAccessor[flatIndex] = val;
+				}
+				SYCL_END;
+			});
+		}else {
+			cgh.parallel_for<class init_f>(range, [=, h=this->h, ga=gamma, dims=levels[0].f.getDims()](cl::sycl::id<3> index) {
+				double1 x = index[0] * h;
+				double1 y = index[1] * h;
+				double1 z = index[2] * h;
+
+				double1 val = 2.0 * ((y - y * y) * (z - z * z) + (x - x * x) * (z - z * z) + (x - x * x) * (y - y * y))
+					+ ga * (x - x * x) * (y - y * y) * (z - z * z)
+					* cl::sycl::exp((x - x * x) * (y - y * y) * (z - z * z));
+
+				int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
+				wAccessor[flatIndex] = val;
+			});
+		}
 	});
 
 	// Init other buffers to 0
