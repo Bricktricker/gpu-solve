@@ -18,7 +18,7 @@ public:
 		return idx3[2] * (dims[1] * dims[0]) + idx3[1] * dims[0] + idx3[0];
 	}
 
-#ifdef SYCL_GTX_TARGET
+#ifdef SYCL_GTX
 	template<class point_ref_x, class point_ref_y, class point_ref_z>
 	static int1 flatIndex(const BufferDim& dims, const point_ref_x& x, const point_ref_y& y, const point_ref_z& z)
 #else
@@ -33,7 +33,7 @@ public:
 		return (idx3[2]+1) * (dims[1] * dims[0]) + (idx3[1]+1) * dims[0] + (idx3[0]+1);
 	}
 
-#ifdef SYCL_GTX_TARGET
+#ifdef SYCL_GTX
 	template<class point_ref_x, class point_ref_y, class point_ref_z>
 	static cl::sycl::detail::data_ref shift1Index(const BufferDim& dims, const point_ref_x& x, const point_ref_y& y, const point_ref_z& z)
 #else

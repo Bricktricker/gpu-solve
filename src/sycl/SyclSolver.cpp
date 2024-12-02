@@ -8,14 +8,14 @@
 
 using namespace cl::sycl;
 
-#ifndef SYCL_GTX_TARGET
+#ifndef SYCL_GTX
 // Mark Stencil as device copyable
 template<>
 struct sycl::is_device_copyable<Stencil> : std::true_type {};
 #endif
 
 // Used for debugging to read values on the host
-#ifdef SYCL_GTX_TARGET
+#ifdef SYCL_GTX
 namespace {
 double getGpuVal(accessor<double, 1, access::mode::read, access::target::host_buffer>& acc, const SyclBuffer& buf, std::size_t x, std::size_t y, std::size_t z)
 {
@@ -355,7 +355,7 @@ double SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t lev
         });
     }
 
-#ifdef SYCL_GTX_TARGET
+#ifdef SYCL_GTX
     auto accumAcc = accumBuf.get_access<access::mode::read, access::target::host_buffer>();
 #else
     sycl::host_accessor accumAcc{ accumBuf, sycl::read_only };
