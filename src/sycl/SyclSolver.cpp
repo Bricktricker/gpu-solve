@@ -168,7 +168,7 @@ void SyclSolver::jacobi(queue& queue, SyclGridData& grid, std::size_t levelNum, 
 {
     SyclGridData::LevelData& level = grid.getLevel(levelNum);
     const double preFac = grid.stencil.values[0] / (level.h * level.h);
-    const double alpha = 1.0 / grid.stencil.values[0]; // stencil center
+    const double alpha = (level.h * level.h) / grid.stencil.values[0]; // stencil center
 
     for (std::size_t i = 0; i < maxiter; i++) {
         compResidual(queue, grid, levelNum);
@@ -217,9 +217,9 @@ void SyclSolver::compResidual(queue& queue, SyclGridData& grid, std::size_t leve
             }
 
             int1 centerIdx = Sycl3dAccesor::shift1Index(dims, index);
+            stencilsum /= h * h;
 
             if (!isLinear) {
-                stencilsum /= h * h;
                 // See tutorial_multigrid.pdf, page 102, Formula 6.13
                 double1 vVal = vAcc[centerIdx];
                 double1 ex = cl::sycl::exp(vVal);

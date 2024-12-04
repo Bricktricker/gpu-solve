@@ -50,7 +50,7 @@ CpuGridData::CpuGridData(const GridParams& grid)
 					double y = j * h;
 					double z = k * h;
 
-					double val = -h * h * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
+					double val = -(f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
 					levels[0].f.set(i + 1, j + 1, k + 1, val);
 				}
 			}

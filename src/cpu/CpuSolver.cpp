@@ -38,8 +38,9 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 					stencilsum += grid.stencil.values[i] * vVal;
 				}
 
+				stencilsum /= level.h * level.h;
+
 				if (!grid.isLinear) {
-					stencilsum /= level.h * level.h;
 
 					// See tutorial_multigrid.pdf, page 102, Formula 6.13
 					double ex = exp(level.v.get(x, y, z));
@@ -117,7 +118,7 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 {	
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 	const double preFac = grid.stencil.values[0] / (level.h * level.h);
-	const double alpha = 1.0 / grid.stencil.values[0]; // stencil center
+	const double alpha = (level.h * level.h) / grid.stencil.values[0]; // stencil center
 
 	for (std::size_t i = 0; i < maxiter; i++) {
 		

@@ -68,7 +68,7 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 					double1 y = (index[1] - 1) * h;
 					double1 z = (index[2] - 1) * h;
 
-					double1 val = (-h * h) * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
+					double1 val = -1.0 * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
 
 					wAccessor[flatIndex] = val;
 				}
