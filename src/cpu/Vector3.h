@@ -13,6 +13,7 @@ public:
 	void fill(double val);
 
 	Vector3& operator+=(const Vector3& rhs);
+	Vector3& operator-=(const Vector3& rhs);
 
 	std::size_t getXdim() const
 	{

@@ -11,11 +11,12 @@ public:
 
 	struct LevelData {
 		SyclBuffer v;
+		SyclBuffer restV;
 		SyclBuffer f;
 		SyclBuffer r;
 		SyclBuffer e;
 		std::array<std::size_t, 3> levelDim;
-		Stencil stencil;
+		double h;
 	};
 
 	SyclGridData(const GridParams& grid);

@@ -1,6 +1,5 @@
 #include "SyclGridData.h"
 
-// TODO: move them somewhere else
 namespace {
 	template<class Float>
 	Float f0(const Float& x) {
@@ -15,36 +14,30 @@ namespace {
 SyclGridData::SyclGridData(const GridParams& grid)
 	: GridParams(grid)
 {
-	int maxlevel;
 	// magic 2.0 at the end is the coarsening ratio
-	if (periodic) {
-		maxlevel = (int)floor(log((double)(std::min(std::min(gridDim[0], gridDim[1]), gridDim[2]) + 1)) / log(2.0)) + 1;
-	}
-	else {
-		maxlevel = (int)floor(log((double)std::min(std::min(gridDim[0], gridDim[1]), gridDim[2])) / log(2.0)) + 1;
-	}
+	int maxlevel = (int)floor(log((double)std::min(std::min(gridDim[0], gridDim[1]), gridDim[2])) / log(2.0)) + 1;
 	levels.reserve(maxlevel);
 
 	for (std::size_t i = 0; i < maxlevel; i++) {
 		std::array<std::size_t, 3> levelDim;
-		Stencil levelStencil;
 		if (i == 0) {
 			levelDim = gridDim;
-			levelStencil = stencil;
 		}else {
 			levelDim[0] = levels[i - 1].levelDim[0] / 2;
 			levelDim[1] = levels[i - 1].levelDim[1] / 2;
 			levelDim[2] = levels[i - 1].levelDim[2] / 2;
-			levelStencil = Stencil::simpleStencil(this->stencil, i);
 		}
+
+		double h = 1.0 / (levelDim[1] + 1);
 
 		levels.push_back(LevelData{
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
+			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			levelDim,
-			levelStencil
+			h
 		});
 
 	}
@@ -56,30 +49,45 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 		auto wAccessor = levels[0].f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 		cl::sycl::range<3> range(levels[0].levelDim[0] + 2, levels[0].levelDim[1] + 2, levels[0].levelDim[2] + 2);
 
-		const auto xRightSide = levels[0].levelDim[0] + 1;
-		const auto yRightSide = levels[0].levelDim[1] + 1;
-		const auto zRightSide = levels[0].levelDim[2] + 1;
+		if (this->isLinear) {
+			const auto xRightSide = levels[0].levelDim[0] + 1;
+			const auto yRightSide = levels[0].levelDim[1] + 1;
+			const auto zRightSide = levels[0].levelDim[2] + 1;
 
-		cgh.parallel_for<class init_f>(range, [=, h=this->h, dims = levels[0].f.getDims()](cl::sycl::id<3> index) {
-			int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
-			SYCL_IF(index[0] == 0 || index[1] == 0 || index[2] == 0) {
-				wAccessor[flatIndex] = 0.0;
-			}
-			SYCL_ELSE_IF(index[0] == xRightSide || index[1] == yRightSide || index[2] == zRightSide) {
-				wAccessor[flatIndex] = 0.0;
-			}
-			SYCL_ELSE
-			{
-				double1 x = (index[0] - 1) * h;
-				double1 y = (index[1] - 1) * h;
-				double1 z = (index[2] - 1) * h;
+			cgh.parallel_for<class init_f_lin>(range, [=, h = this->h, dims = levels[0].f.getDims()](cl::sycl::id<3> index) {
+				int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
+				SYCL_IF(index[0] == 0 || index[1] == 0 || index[2] == 0) {
+					wAccessor[flatIndex] = 0.0;
+				}
+				SYCL_ELSE_IF(index[0] == xRightSide || index[1] == yRightSide || index[2] == zRightSide) {
+					wAccessor[flatIndex] = 0.0;
+				}
+				SYCL_ELSE
+				{
+					double1 x = (index[0] - 1) * h;
+					double1 y = (index[1] - 1) * h;
+					double1 z = (index[2] - 1) * h;
 
-				double1 val = (-h * h) * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
+					double1 val = -1.0 * (f2(x) * f0(y) * f0(z) + f0(x) * f2(y) * f0(z) + f0(x) * f0(y) * f2(z));
 
+					wAccessor[flatIndex] = val;
+				}
+				SYCL_END;
+			});
+		}else {
+			cgh.parallel_for<class init_f>(range, [=, h=this->h, ga=gamma, dims=levels[0].f.getDims()](cl::sycl::id<3> index) {
+				double1 x = index[0] * h;
+				double1 y = index[1] * h;
+				double1 z = index[2] * h;
+
+				double1 val = 2.0 * ((y - y * y) * (z - z * z) + (x - x * x) * (z - z * z) + (x - x * x) * (y - y * y))
+					+ ga * (x - x * x) * (y - y * y) * (z - z * z)
+					* cl::sycl::exp((x - x * x) * (y - y * y) * (z - z * z));
+
+				int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
 				wAccessor[flatIndex] = val;
-			}
-			SYCL_END;
-		});
+			});
+		}
 	});
 
 	// Init other buffers to 0
@@ -98,10 +106,12 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 
 		queue.submit([&](cl::sycl::handler& cgh) {
 			auto vAcc = level.v.get_access<cl::sycl::access::mode::discard_write>(cgh);
+			auto restvAcc = level.restV.get_access<cl::sycl::access::mode::discard_write>(cgh);
 			auto rAcc = level.r.get_access<cl::sycl::access::mode::discard_write>(cgh);
 			auto eAcc = level.e.get_access<cl::sycl::access::mode::discard_write>(cgh);
-			cgh.parallel_for<class clearAll>(cl::sycl::range<1>(level.v.flatSize()), [vAcc, rAcc, eAcc](cl::sycl::id<1> index) {
+			cgh.parallel_for<class clearAll>(cl::sycl::range<1>(level.v.flatSize()), [vAcc, restvAcc, rAcc, eAcc](cl::sycl::id<1> index) {
 				vAcc[index] = 0.0;
+				restvAcc[index] = 0.0;
 				rAcc[index] = 0.0;
 				eAcc[index] = 0.0;
 			});

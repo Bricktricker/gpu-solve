@@ -23,19 +23,17 @@ struct Stencil {
         assert(i < offsets.size());
         return std::get<2>(offsets[i]);
     }
-
-    //static Stencil galerkin(const Stencil& prevStencil);
-    static Stencil simpleStencil(const Stencil& rootStencil, std::size_t level);
 };
 
 struct GridParams {
     std::size_t maxiter;
     double tol;
     double omega; // Relaxation coefficient
+    double gamma; // non-linear weight
     double h;
     std::array<std::size_t, 3> gridDim;
     std::size_t preSmoothing;
     std::size_t postSmoothing;
     Stencil stencil{};
-    bool periodic;
+    bool isLinear;
 };

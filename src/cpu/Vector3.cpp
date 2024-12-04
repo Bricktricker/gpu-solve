@@ -15,6 +15,7 @@ void Vector3::set(std::size_t x, std::size_t y, std::size_t z, double val)
 {
 	const std::size_t idx = z + y * dims[2] + x * dims[2] * dims[1];
 	assert(idx < values.size());
+	assert(!std::isnan(val) && !std::isinf(val));
 	values[idx] = val;
 }
 
@@ -41,6 +42,17 @@ Vector3& Vector3::operator+=(const Vector3& rhs)
 	return *this;
 }
 
+Vector3& Vector3::operator-=(const Vector3& rhs)
+{
+	assert(flatSize() == rhs.flatSize());
+
+	for (std::size_t i = 0; i < flatSize(); i++) {
+		values[i] -= rhs.values[i];
+	}
+
+	return *this;
+}
+
 void Vector3::dump(const std::string& file) const
 {
 	std::ofstream out;
@@ -48,13 +60,17 @@ void Vector3::dump(const std::string& file) const
 		out.open(file);
 	}
 
+	if (out) {
+		out << getXdim() << ' ' << getYdim() << ' ' << getZdim() << '\n';
+	}
+
 	for (std::size_t x = 0; x < getXdim(); x++) {
 		for (std::size_t y = 0; y < getYdim(); y++) {
 			for (std::size_t z = 0; z < getZdim(); z++) {
 				if (out) {
-					out << "Index: " << x << ' ' << y << ' ' << z << " Value: " << get(x, y, z) << '\n';
+					out << x << ' ' << y << ' ' << z << ' ' << get(x, y, z) << '\n';
 				}else {
-					std::cout << "Index: " << x << ' ' << y << ' ' << z << " Value: " << get(x, y, z) << '\n';
+					std::cout << x << ' ' << y << ' ' << z << ' ' << get(x, y, z) << '\n';
 				}
 			}
 		}

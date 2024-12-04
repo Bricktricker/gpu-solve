@@ -14,10 +14,13 @@ void Timer::stop()
 {
 	auto end = std::chrono::high_resolution_clock::now();
 	const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - startPoint).count();
-	std::cout << "Took " << time << "ms, partials: ";
+	std::cout << "Took " << time << "ms";
 
-	for (const auto& [name, t] : times) {
-		std::cout << name << ": " << t.timeMs << "ms ";
+	if (times.size() > 0) {
+		std::cout << ", ";
+		for (const auto& [name, t] : times) {
+			std::cout << name << ": " << t.timeMs << "ms ";
+		}
 	}
 
 	std::cout << '\n';
