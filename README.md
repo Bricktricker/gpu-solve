@@ -26,7 +26,8 @@ The config file describes the problem structure, an example can be found at [exa
 7. Number of pre-smoothing steps
 8. Number of post-smoothing steps
 9. Relaxation coefficient
-10. The seven stencil values, seperated by space
-11. Stencil value offsets in the X direction
-12. Stencil value offsets in the Y direction
-13. Stencil value offsets in the Z direction
+10. Gamma for the non-linear part
+11. The seven stencil values, seperated by space
+12. Stencil value offsets in the X direction
+13. Stencil value offsets in the Y direction
+14. Stencil value offsets in the Z direction
