@@ -124,7 +124,8 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 		
 		compResidual(grid, levelNum);
 		
-		for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
+#pragma omp parallel for schedule(static,8)
+		for (std::int64_t x = 1; x < level.levelDim[0] + 1; x++) {
 			for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
 				for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
 

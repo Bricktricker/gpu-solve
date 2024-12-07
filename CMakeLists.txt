@@ -11,6 +11,8 @@ endif(NOT CMAKE_BUILD_TYPE)
 
 find_package(OpenCL REQUIRED)
 
+find_package(OpenMP)
+
 add_subdirectory(extern/sycl-gtx)
 
 add_subdirectory(src)

@@ -3,6 +3,9 @@ set(BASE_SYCL_FILES ${BASE_CPP_FILES} "sycl/SyclGridData.cpp" "sycl/SyclSolver.c
 
 add_executable(GpuSolve-cpu ${BASE_CPP_FILES} "cpu/CpuGridData.cpp" "cpu/CpuSolver.cpp")
 target_compile_definitions(GpuSolve-cpu PUBLIC GPUSOLVE_CPU)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(GpuSolve-cpu PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 add_executable(GpuSolve-gtx ${BASE_SYCL_FILES})
 target_link_libraries(GpuSolve-gtx sycl-gtx)
