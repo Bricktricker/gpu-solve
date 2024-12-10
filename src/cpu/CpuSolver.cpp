@@ -3,6 +3,8 @@
 #include <iostream>
 #include <chrono>
 #include <math.h>
+#include <omp.h>
+#include "../Timer.h"
 
 void CpuSolver::solve(CpuGridData& grid)
 {
@@ -10,25 +12,31 @@ void CpuSolver::solve(CpuGridData& grid)
 	double initialResidual = compResidual(grid, 0);
 	std::cout << "Inital residual: " << initialResidual << '\n';
 
-	auto start = std::chrono::high_resolution_clock::now();
-
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
+		Timer::start();
 		double res = vcycle(grid);
 
-		const auto end = std::chrono::high_resolution_clock::now();
-		const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-		start = end;
-
-		std::cout << "iter: " << i << " residual: " << res << " took " << time << "ms\n";
+		std::cout << "iter: " << i << " residual: " << res << ' ';
+		Timer::stop();
 	}
 }
 
 double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 {
-	double res = 0.0;
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 
-	for (std::size_t x = 1; x < level.levelDim[0]+1; x++) {
+	/*
+	* Compute the residual on multiple threads using openMP
+	* Save the computed residual in the following array using the thread id as index
+	* The used indicies are space out by CACHE_LINE_SIZE bytes to prevent false sharing
+	*/
+#define CACHE_LINE_SIZE 64
+	constexpr int THREAD_OFFSET = CACHE_LINE_SIZE / sizeof(double);
+	std::array<double, 16 * THREAD_OFFSET> shards = {};
+
+#pragma omp parallel for schedule(static,8)
+	for (std::int64_t x = 1; x < level.levelDim[0]+1; x++) {
+		const auto omp_rank = omp_get_thread_num() * THREAD_OFFSET;
 		for (std::size_t y = 1; y < level.levelDim[1]+1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2]+1; z++) {
 				
@@ -50,9 +58,16 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 
 				double r = level.f.get(x, y, z) - stencilsum;
 				level.r.set(x, y, z, r);
-				res += r * r;
+
+				shards[omp_rank] += r * r;
 			}
 		}
+	}
+
+	// Accumulate the computed residual parts
+	double res = 0.0;
+	for (std::size_t i = 0; i < shards.size(); i++) {
+		res += shards[i];
 	}
 	
 	return sqrt(res);
