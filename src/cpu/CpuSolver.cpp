@@ -32,7 +32,7 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 	*/
 #define CACHE_LINE_SIZE 64
 	constexpr int THREAD_OFFSET = CACHE_LINE_SIZE / sizeof(double);
-	std::array<double, 16 * THREAD_OFFSET> shards = {};
+	std::vector<double> shards(16 * THREAD_OFFSET);
 
 #pragma omp parallel for schedule(static,8)
 	for (std::int64_t x = 1; x < level.levelDim[0]+1; x++) {
@@ -66,7 +66,7 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 
 	// Accumulate the computed residual parts
 	double res = 0.0;
-	for (std::size_t i = 0; i < shards.size(); i++) {
+	for (std::size_t i = 0; i < shards.size(); i += THREAD_OFFSET) {
 		res += shards[i];
 	}
 	
@@ -169,7 +169,8 @@ void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vect
 	assert(level.v.flatSize() == v.flatSize());
 	Vector3& result = level.r;
 
-	for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
+#pragma omp parallel for schedule(static,8)
+	for (std::int64_t x = 1; x < level.levelDim[0] + 1; x++) {
 		for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
 
@@ -191,7 +192,9 @@ void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vect
 
 void CpuSolver::restrict(const Vector3& fine, Vector3& coarse)
 {
-	for (std::size_t x = 1; x < coarse.getXdim()-1; x++) {
+
+#pragma omp parallel for schedule(static,8)
+	for (std::int64_t x = 1; x < coarse.getXdim()-1; x++) {
 		for (std::size_t y = 1; y < coarse.getYdim()-1; y++) {
 			for (std::size_t z = 1; z < coarse.getZdim()-1; z++) {
 
