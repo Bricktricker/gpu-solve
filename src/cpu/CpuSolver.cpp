@@ -32,7 +32,7 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 	*/
 #define CACHE_LINE_SIZE 64
 	constexpr int THREAD_OFFSET = CACHE_LINE_SIZE / sizeof(double);
-	std::vector<double> shards(16 * THREAD_OFFSET);
+	std::vector<double> shards(omp_get_max_threads() * THREAD_OFFSET);
 
 #pragma omp parallel for schedule(static,8)
 	for (std::int64_t x = 1; x < level.levelDim[0]+1; x++) {
