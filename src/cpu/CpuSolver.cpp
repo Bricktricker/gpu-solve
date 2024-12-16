@@ -25,18 +25,10 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 {
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 
-	/*
-	* Compute the residual on multiple threads using openMP
-	* Save the computed residual in the following array using the thread id as index
-	* The used indicies are space out by CACHE_LINE_SIZE bytes to prevent false sharing
-	*/
-#define CACHE_LINE_SIZE 64
-	constexpr int THREAD_OFFSET = CACHE_LINE_SIZE / sizeof(double);
-	std::vector<double> shards(omp_get_max_threads() * THREAD_OFFSET);
+	double res = 0.0;
 
-#pragma omp parallel for schedule(static,8)
+#pragma omp parallel for schedule(static,8) reduction(+:resReduction)
 	for (std::int64_t x = 1; x < level.levelDim[0]+1; x++) {
-		const auto omp_rank = omp_get_thread_num() * THREAD_OFFSET;
 		for (std::size_t y = 1; y < level.levelDim[1]+1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2]+1; z++) {
 				
@@ -59,15 +51,9 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 				double r = level.f.get(x, y, z) - stencilsum;
 				level.r.set(x, y, z, r);
 
-				shards[omp_rank] += r * r;
+				res += r * r;
 			}
 		}
-	}
-
-	// Accumulate the computed residual parts
-	double res = 0.0;
-	for (std::size_t i = 0; i < shards.size(); i += THREAD_OFFSET) {
-		res += shards[i];
 	}
 	
 	return sqrt(res);
