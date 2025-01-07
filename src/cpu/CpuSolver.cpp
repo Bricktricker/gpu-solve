@@ -223,7 +223,8 @@ void CpuSolver::interpolate(CpuGridData& grid, std::size_t level)
 	}
 
 	// Interpolate in x-direction
-	for (std::int64_t x = 0; x+2 < fine.getXdim(); x += 2) {
+#pragma omp parallel for schedule(static,4)
+	for (std::int64_t x = 0; x < fine.getXdim()-2; x += 2) {
 		for (std::size_t y = 0; y < fine.getYdim(); y += 2) {
 			for (std::size_t z = 0; z < fine.getZdim(); z += 2) {
 				double val = 0.5 * fine.get(x, y, z) + 0.5 * fine.get(x + 2, y, z);
