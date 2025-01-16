@@ -3,6 +3,8 @@
 #include <iostream>
 #include <chrono>
 #include <math.h>
+#include <omp.h>
+#include "../Timer.h"
 
 void CpuSolver::solve(CpuGridData& grid)
 {
@@ -10,25 +12,23 @@ void CpuSolver::solve(CpuGridData& grid)
 	double initialResidual = compResidual(grid, 0);
 	std::cout << "Inital residual: " << initialResidual << '\n';
 
-	auto start = std::chrono::high_resolution_clock::now();
-
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
+		Timer::start();
 		double res = vcycle(grid);
 
-		const auto end = std::chrono::high_resolution_clock::now();
-		const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-		start = end;
-
-		std::cout << "iter: " << i << " residual: " << res << " took " << time << "ms\n";
+		std::cout << "iter: " << i << " residual: " << res << ' ';
+		Timer::stop();
 	}
 }
 
 double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 {
-	double res = 0.0;
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 
-	for (std::size_t x = 1; x < level.levelDim[0]+1; x++) {
+	double res = 0.0;
+
+#pragma omp parallel for schedule(static,8) reduction(+:res)
+	for (std::int64_t x = 1; x < level.levelDim[0]+1; x++) {
 		for (std::size_t y = 1; y < level.levelDim[1]+1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2]+1; z++) {
 				
@@ -50,6 +50,7 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 
 				double r = level.f.get(x, y, z) - stencilsum;
 				level.r.set(x, y, z, r);
+
 				res += r * r;
 			}
 		}
@@ -124,7 +125,8 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 		
 		compResidual(grid, levelNum);
 		
-		for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
+#pragma omp parallel for schedule(static,8)
+		for (std::int64_t x = 1; x < level.levelDim[0] + 1; x++) {
 			for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
 				for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
 
@@ -153,7 +155,8 @@ void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vect
 	assert(level.v.flatSize() == v.flatSize());
 	Vector3& result = level.r;
 
-	for (std::size_t x = 1; x < level.levelDim[0] + 1; x++) {
+#pragma omp parallel for schedule(static,8)
+	for (std::int64_t x = 1; x < level.levelDim[0] + 1; x++) {
 		for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
 
@@ -175,7 +178,9 @@ void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vect
 
 void CpuSolver::restrict(const Vector3& fine, Vector3& coarse)
 {
-	for (std::size_t x = 1; x < coarse.getXdim()-1; x++) {
+
+#pragma omp parallel for schedule(static,8)
+	for (std::int64_t x = 1; x < coarse.getXdim()-1; x++) {
 		for (std::size_t y = 1; y < coarse.getYdim()-1; y++) {
 			for (std::size_t z = 1; z < coarse.getZdim()-1; z++) {
 
@@ -202,11 +207,13 @@ void CpuSolver::restrict(const Vector3& fine, Vector3& coarse)
 
 void CpuSolver::interpolate(CpuGridData& grid, std::size_t level)
 {
+	
 	const Vector3& coarse = grid.getLevel(level + 1).v;
 	Vector3& fine = grid.getLevel(level).e;
 
 	// prepare
-	for (std::size_t x = 0; x < fine.getXdim() - 1; x += 2) {
+#pragma omp parallel for schedule(static,4)
+	for (std::int64_t x = 0; x < fine.getXdim() - 1; x += 2) {
 		for (std::size_t y = 0; y < fine.getYdim() - 1; y += 2) {
 			for (std::size_t z = 0; z < fine.getZdim() - 1; z += 2) {
 				double val = coarse.get(x/2, y/2, z/2);
@@ -216,7 +223,8 @@ void CpuSolver::interpolate(CpuGridData& grid, std::size_t level)
 	}
 
 	// Interpolate in x-direction
-	for (std::size_t x = 0; x+2 < fine.getXdim(); x += 2) {
+#pragma omp parallel for schedule(static,4)
+	for (std::int64_t x = 0; x < fine.getXdim()-2; x += 2) {
 		for (std::size_t y = 0; y < fine.getYdim(); y += 2) {
 			for (std::size_t z = 0; z < fine.getZdim(); z += 2) {
 				double val = 0.5 * fine.get(x, y, z) + 0.5 * fine.get(x + 2, y, z);
@@ -226,7 +234,8 @@ void CpuSolver::interpolate(CpuGridData& grid, std::size_t level)
 	}
 
 	// Interpolate in y-direction
-	for (std::size_t x = 0; x < fine.getXdim(); x++) {
+#pragma omp parallel for schedule(static,4)
+	for (std::int64_t x = 0; x < fine.getXdim(); x++) {
 		for (std::size_t y = 0; y + 2 < fine.getYdim(); y += 2) {
 			for (std::size_t z = 0; z < fine.getZdim(); z += 2) {
 				double val = 0.5 * fine.get(x, y, z) + 0.5 * fine.get(x, y+2, z);
@@ -236,7 +245,8 @@ void CpuSolver::interpolate(CpuGridData& grid, std::size_t level)
 	}
 
 	// Interpolate in z-direction
-	for (std::size_t x = 0; x < fine.getXdim(); x++) {
+#pragma omp parallel for schedule(static,4)
+	for (std::int64_t x = 0; x < fine.getXdim(); x++) {
 		for (std::size_t y = 0; y < fine.getYdim(); y++) {
 			for (std::size_t z = 0; z + 2 < fine.getZdim(); z += 2) {
 				double val = 0.5 * fine.get(x, y, z) + 0.5 * fine.get(x, y, z + 2);
@@ -244,5 +254,6 @@ void CpuSolver::interpolate(CpuGridData& grid, std::size_t level)
 			}
 		}
 	}
+
 }
 
