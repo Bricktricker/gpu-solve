@@ -4,6 +4,7 @@
 #include "gridParams.h"
 #include "cpu/CpuGridData.h"
 #include "cpu/CpuSolver.h"
+#include "cpu/NewtonSolver.h"
 #ifndef GPUSOLVE_CPU
 #include "sycl/SyclSolver.h"
 #endif
@@ -32,7 +33,11 @@ int main(int argc, char* argv[]) {
         configFile >> gridParams.gridDim[0];
         configFile >> gridParams.gridDim[1];
         configFile >> gridParams.gridDim[2];
-        configFile >> gridParams.isLinear;
+
+        int mode;
+        configFile >> mode;
+        gridParams.mode = static_cast<GridParams::Mode>(mode);
+
         configFile >> gridParams.preSmoothing;
         configFile >> gridParams.postSmoothing;
         configFile >> gridParams.omega;
@@ -62,13 +67,19 @@ int main(int argc, char* argv[]) {
         gridParams.h = 1.0 / (gridParams.gridDim[1] + 1);
     }
 
+    if (gridParams.mode == GridParams::Mode::NEWTON) {
+        CpuGridData cpuGridData(gridParams);
+        NewtonSolver::solve(cpuGridData);
+    }
+    else {
 #ifdef GPUSOLVE_CPU
-    CpuGridData cpuGridData(gridParams);
-    CpuSolver::solve(cpuGridData);
+        CpuGridData cpuGridData(gridParams);
+        CpuSolver::solve(cpuGridData);
 #else
-    SyclGridData syclGridData(gridParams);
-    SyclSolver::solve(syclGridData);
+        SyclGridData syclGridData(gridParams);
+        SyclSolver::solve(syclGridData);
 #endif
+    }
 
     return 0;
 }

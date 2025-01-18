@@ -41,7 +41,7 @@ CpuGridData::CpuGridData(const GridParams& grid)
 	}
 
 	// fill right hand side for the first level
-	if (this->isLinear) {
+	if (this->mode == GridParams::LINEAR) {
 
 		for (int i = 0; i < levels[0].levelDim[0]; i++) {
 			for (int j = 0; j < levels[0].levelDim[1]; j++) {
