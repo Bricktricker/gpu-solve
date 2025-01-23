@@ -43,7 +43,7 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 
 					// center = 6 / h^2
 					double center = grid.stencil.values[0] / (grid.h * grid.h);
-					center -= grid.gamma * (1 + level.v.get(x, y, z)) * exp(level.v.get(x, y, z));
+					center -= grid.gamma * (1 + level.newtonV.get(x, y, z)) * exp(level.newtonV.get(x, y, z));
 					stencilsum += center;
 				}
 				else {
@@ -192,7 +192,7 @@ void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vect
 
 					// center = 6 / h^2
 					double center = grid.stencil.values[0] / (grid.h * grid.h);
-					center -= grid.gamma * (1 + level.v.get(x, y, z)) * exp(level.v.get(x, y, z));
+					center -= grid.gamma * (1 + level.newtonV.get(x, y, z)) * exp(level.newtonV.get(x, y, z));
 					stencilsum += center;
 
 				}

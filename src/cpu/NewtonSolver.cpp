@@ -8,12 +8,13 @@ void NewtonSolver::solve(CpuGridData& grid) {
 
 	grid.mode = GridParams::Mode::NONLINEAR;
 	double initialResidual = CpuSolver::compResidual(grid, 0);
-	std::cout << "Inital residual: " << initialResidual << '\n';
+	std::cout << "Inital residual in NewtonSolver: " << initialResidual << '\n';
 
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
 		Timer::start();
 
 		grid.mode = GridParams::Mode::NONLINEAR;
+		grid.getLevel(0).v = grid.getLevel(0).newtonV;
 		double res = CpuSolver::compResidual(grid, 0);
 		std::cout << "residual before findError: " << res << '\n';
 		grid.mode = GridParams::Mode::NEWTON;
@@ -37,6 +38,6 @@ void NewtonSolver::findError(CpuGridData& grid)
 
 	CpuSolver::solve(mgGrid);
 
-	Vector3& v = grid.getLevel(0).v;
-	v += mgGrid.getLevel(0).v;
+	Vector3& newtonV = grid.getLevel(0).newtonV;
+	newtonV += mgGrid.getLevel(0).v;
 }
