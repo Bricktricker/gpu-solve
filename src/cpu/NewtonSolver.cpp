@@ -5,6 +5,7 @@
 
 void NewtonSolver::solve(CpuGridData& grid) {
 	// Compute inital residual
+	//grid.gamma = 0.0;
 
 	grid.mode = GridParams::Mode::NONLINEAR;
 	double initialResidual = CpuSolver::compResidual(grid, 0);
@@ -35,6 +36,13 @@ void NewtonSolver::findError(CpuGridData& grid)
 	// Solve f = J(v)*e, where f is the residual r
 	rootLevel.f = rootLevel.r;
 	rootLevel.v.fill(0.0);
+
+	// restrict newtonV to all levels
+	for (std::size_t i = 1; i < grid.numLevels() - 1; i++) {
+		const Vector3& src = mgGrid.getLevel(i - 1).newtonV;
+		Vector3& dst = mgGrid.getLevel(i).newtonV;
+		CpuSolver::restrict(src, dst);
+	}
 
 	CpuSolver::solve(mgGrid);
 

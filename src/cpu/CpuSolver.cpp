@@ -35,16 +35,14 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 				double stencilsum = 0.0;
 				if (grid.mode == GridParams::NEWTON) {
 					// NEWTON-Residuum:
-					// Start at index 1 to skip center
-					for (std::size_t i = 1; i < grid.stencil.values.size(); i++) {
+					for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
 						double vVal = level.v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
 						stencilsum += grid.stencil.values[i] * vVal;
 					}
 
-					// center = 6 / h^2
-					double center = grid.stencil.values[0] / (grid.h * grid.h);
-					center -= grid.gamma * (1 + level.newtonV.get(x, y, z)) * exp(level.newtonV.get(x, y, z));
-					stencilsum += center;
+					stencilsum /= level.h * level.h;
+
+					stencilsum -= grid.gamma * (1 + level.newtonV.get(x, y, z)) * exp(level.newtonV.get(x, y, z));
 				}
 				else {
 					for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
@@ -89,7 +87,7 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		// f^2h = r^2h
 		restrict(r, nextLevel.f);
 
-		if (grid.mode == GridParams::LINEAR) {
+		if (grid.mode != GridParams::NONLINEAR) {
 			nextLevel.v.fill(0.0);
 		}else {
 			// See tutorial_multigrid.pdf, page 98, Full Approximation Scheme (FAS)
@@ -110,7 +108,7 @@ double CpuSolver::vcycle(CpuGridData& grid)
 
 	for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
 		
-		if (grid.mode != GridParams::LINEAR) {
+		if (grid.mode == GridParams::NONLINEAR) {
 			CpuGridData::LevelData& level = grid.getLevel(i);
 			// compute u^2h = u^2h - v^2h
 			level.v -= level.restV;
@@ -157,8 +155,8 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 					}
 					else {
 						// Newton
-						double ex = exp(level.v.get(x, y, z));
-						newV = preFac - grid.gamma * (1 + level.v.get(x, y, z)) * ex;
+						newV = level.v.get(x, y, z) + grid.omega * (alpha * level.r.get(x, y, z));
+						//newV = level.v.get(x, y, z) + preFac - grid.gamma * (1 + level.v.get(x, y, z)) * exp(level.v.get(x, y, z));
 					}
 
 					level.v.set(x, y, z, newV);
@@ -171,6 +169,8 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 // Only needed for non-linear code
 void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vector3& v)
 {
+	assert(grid.mode == GridParams::NONLINEAR);
+
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 	assert(level.v.flatSize() == v.flatSize());
 	Vector3& result = level.r;
