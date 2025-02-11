@@ -8,15 +8,22 @@
 void CpuSolver::solve(CpuGridData& grid)
 {
 	// Compute inital residual
-	double initialResidual = compResidual(grid, 0);
-	std::cout << "Inital residual: " << initialResidual << '\n';
+	if (grid.printProgress) {
+		double initialResidual = compResidual(grid, 0);
+		std::cout << "Inital residual: " << initialResidual << '\n';
+	}
 
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
-		Timer::start();
+		if (grid.printProgress) {
+			Timer::start();
+		}
+
 		double res = vcycle(grid);
 
-		std::cout << "iter: " << i << " residual: " << res << ' ';
-		Timer::stop();
+		if (grid.printProgress) {
+			std::cout << "iter: " << i << " residual: " << res << ' ';
+			Timer::stop();
+		}
 	}
 }
 
@@ -32,32 +39,21 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 			for (std::size_t z = 1; z < level.levelDim[2]+1; z++) {
 
 				double stencilsum = 0.0;
-				if (grid.mode == GridParams::NEWTON) {
-					// NEWTON-Residuum:
-					for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
-						double vVal = level.v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
-						stencilsum += grid.stencil.values[i] * vVal;
-					}
-
-					stencilsum /= level.h * level.h;
-
-					stencilsum += grid.gamma * (1 + level.newtonV.get(x, y, z)) * exp(level.newtonV.get(x, y, z)) * level.v.get(x,y,z);
+				for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
+					double vVal = level.v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
+					stencilsum += grid.stencil.values[i] * vVal;
 				}
-				else {
-					for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
-						double vVal = level.v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
-						stencilsum += grid.stencil.values[i] * vVal;
-					}
+				stencilsum /= level.h * level.h;
 
-					stencilsum /= level.h * level.h;
-
-					if (grid.mode != GridParams::LINEAR) {
-
-						// See tutorial_multigrid.pdf, page 102, Formula 6.13
-						double ex = exp(level.v.get(x, y, z));
-						double nonLinear = grid.gamma * level.v.get(x, y, z) * ex;
-						stencilsum += nonLinear;
-					}
+				if (grid.mode == GridParams::NEWTON) {
+					double ex = exp(level.newtonV.get(x, y, z));
+					stencilsum += grid.gamma * (1 + level.newtonV.get(x, y, z)) * level.v.get(x,y,z) * ex;
+				}
+				else if(grid.mode == GridParams::NONLINEAR) {
+					// See tutorial_multigrid.pdf, page 102, Formula 6.13
+					double ex = exp(level.v.get(x, y, z));
+					double nonLinear = grid.gamma * level.v.get(x, y, z) * ex;
+					stencilsum += nonLinear;
 				}
 
 				double r = level.f.get(x, y, z) - stencilsum;

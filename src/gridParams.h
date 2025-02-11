@@ -42,4 +42,6 @@ struct GridParams {
     std::size_t postSmoothing;
     Stencil stencil{};
     Mode mode;
+
+    bool printProgress = true;
 };
