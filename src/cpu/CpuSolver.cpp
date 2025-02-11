@@ -3,7 +3,6 @@
 #include <iostream>
 #include <chrono>
 #include <math.h>
-#include <omp.h>
 #include "../Timer.h"
 
 void CpuSolver::solve(CpuGridData& grid)
@@ -27,7 +26,7 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 
 	double res = 0.0;
 
-//#pragma omp parallel for schedule(static,8) reduction(+:res)
+#pragma omp parallel for schedule(static,8) reduction(+:res)
 	for (std::int64_t x = 1; x < level.levelDim[0]+1; x++) {
 		for (std::size_t y = 1; y < level.levelDim[1]+1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2]+1; z++) {
@@ -42,7 +41,7 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 
 					stencilsum /= level.h * level.h;
 
-					stencilsum -= grid.gamma * (1 + level.newtonV.get(x, y, z)) * exp(level.newtonV.get(x, y, z));
+					stencilsum += grid.gamma * (1 + level.newtonV.get(x, y, z)) * exp(level.newtonV.get(x, y, z)) * level.v.get(x,y,z);
 				}
 				else {
 					for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
@@ -138,7 +137,7 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 		
 		compResidual(grid, levelNum);
 		
-//#pragma omp parallel for schedule(static,8)
+#pragma omp parallel for schedule(static,8)
 		for (std::int64_t x = 1; x < level.levelDim[0] + 1; x++) {
 			for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
 				for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
@@ -155,8 +154,10 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 					}
 					else {
 						// Newton
-						newV = level.v.get(x, y, z) + grid.omega * (alpha * level.r.get(x, y, z));
-						//newV = level.v.get(x, y, z) + preFac - grid.gamma * (1 + level.v.get(x, y, z)) * exp(level.v.get(x, y, z));
+						double ex = exp(level.newtonV.get(x, y, z));
+						double denuminator = preFac + grid.gamma * (1 + level.newtonV.get(x, y, z)) * ex;
+
+						newV = level.v.get(x, y, z) + grid.omega * (level.r.get(x, y, z) / denuminator);
 					}
 
 					level.v.set(x, y, z, newV);
@@ -181,31 +182,14 @@ void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vect
 			for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
 
 				double stencilsum = 0.0;
-				if (grid.mode == GridParams::NEWTON) {
-
-					// NEWTON-Residuum:
-					// Start at index 1 to skip center
-					for (std::size_t i = 1; i < grid.stencil.values.size(); i++) {
-						double vVal = level.v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
-						stencilsum += grid.stencil.values[i] * vVal;
-					}
-
-					// center = 6 / h^2
-					double center = grid.stencil.values[0] / (grid.h * grid.h);
-					center -= grid.gamma * (1 + level.newtonV.get(x, y, z)) * exp(level.newtonV.get(x, y, z));
-					stencilsum += center;
-
+				for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
+					double vVal = v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
+					stencilsum += grid.stencil.values[i] * vVal;
 				}
-				else {
-					for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
-						double vVal = v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
-						stencilsum += grid.stencil.values[i] * vVal;
-					}
-					stencilsum /= level.h * level.h;
-					// See tutorial_multigrid.pdf, page 102, Formula 6.13
-					double nonLinear = grid.gamma * v.get(x, y, z) * exp(v.get(x, y, z));
-					stencilsum += nonLinear;
-				}
+				stencilsum /= level.h * level.h;
+				// See tutorial_multigrid.pdf, page 102, Formula 6.13
+				double nonLinear = grid.gamma * v.get(x, y, z) * exp(v.get(x, y, z));
+				stencilsum += nonLinear;
 
 				result.set(x, y, z, stencilsum);
 			}
