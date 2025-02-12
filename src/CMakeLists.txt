@@ -1,5 +1,5 @@
 set(BASE_CPP_FILES "main.cpp" "cpu/Vector3.cpp" "Timer.cpp")
-set(BASE_SYCL_FILES ${BASE_CPP_FILES} "sycl/SyclGridData.cpp" "sycl/SyclSolver.cpp")
+set(BASE_SYCL_FILES ${BASE_CPP_FILES} "sycl/SyclGridData.cpp" "sycl/SyclSolver.cpp" "sycl/NewtonSolver.cpp")
 
 add_executable(GpuSolve-cpu ${BASE_CPP_FILES} "cpu/CpuGridData.cpp" "cpu/CpuSolver.cpp" "cpu/NewtonSolver.cpp")
 target_compile_definitions(GpuSolve-cpu PUBLIC GPUSOLVE_CPU)
