@@ -1,5 +1,4 @@
 #include "SyclSolver.h"
-#include "SyclSolver.h"
 #include "../Timer.h"
 #include <iostream>
 #include <chrono>
@@ -45,54 +44,20 @@ void dumpGpuBuf(SyclBuffer& buf, const std::string& file)
 }
 #endif
 
-void SyclSolver::solve(SyclGridData& grid)
+void SyclSolver::solve(ContextHandles& handles, SyclGridData& grid)
 {
-    auto platforms = platform::get_platforms();
-    std::cout << "Number of platforms: " << platforms.size() << '\n';
-    std::size_t platformIdx = 0;
-    std::size_t deviceIdx = 0;
-    for (std::size_t i = 0; i < platforms.size(); i++) {
-        const platform& P = platforms[i];
-        
-        const auto devices = P.get_devices(info::device_type::all);
-        bool foundDevice = false;
-        for (std::size_t j = 0; j < devices.size(); j++) {
-            const auto& device = devices[j];
-            if (device.is_gpu()) {
-                platformIdx = i;
-                deviceIdx = j;
-                foundDevice = true;
-            }
-        }
+    double resInital = sumResidual(handles.queue, grid, 0);
+    std::cout << "Inital residual: " << resInital << '\n';
+
+    for (std::size_t i = 0; i < grid.maxiter; i++) {
+        Timer::start();
+        double res = vcycle(handles.queue, grid);
+
+        std::cout << "iter: " << i << " residual: " << res << ' ';
+        Timer::stop();
     }
-    const platform& P = platforms.at(platformIdx);
-    auto platformName = P.get_info<info::platform::name>();
-    std::cout << "Platform: " << platformName << '\n';
 
-    const auto devices = P.get_devices(info::device_type::all);
-    const device& D = devices.at(deviceIdx);
-    std::cout << "Device: " << D.get_info<info::device::name>() << '\n';
-
-    context C(D);
-    
-    {
-        queue queue(C, D);
-        
-        grid.initBuffers(queue);
-
-        double resInital = sumResidual(queue, grid, 0);
-        std::cout << "Inital residual: " << resInital << '\n';
-
-        for (std::size_t i = 0; i < grid.maxiter; i++) {
-            Timer::start();
-            double res = vcycle(queue, grid);
-
-            std::cout << "iter: " << i << " residual: " << res << ' ';
-            Timer::stop();
-        }
-
-    }
-    
+    handles.queue.wait_and_throw();
 }
 
 double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
@@ -108,7 +73,7 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
         // restrict residual to next level f
         restrict(queue, grid.getLevel(i).r, nextLevel.f);
 
-        if (grid.isLinear) {
+        if (grid.mode != GridParams::NONLINEAR) {
 
             // clear v for next level
             queue.submit([&](handler& cgh) {
@@ -142,7 +107,7 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
         SyclGridData::LevelData& thisLevel = grid.getLevel(i);
         SyclGridData::LevelData& prevLevel = grid.getLevel(i - 1);
 
-        if (!grid.isLinear) {
+        if (grid.mode == GridParams::NONLINEAR) {
             // compute u^2h = u^2h - v^2h
             queue.submit([&](handler& cgh) {
                 auto vAcc = thisLevel.v.get_access<access::mode::read_write>(cgh);
@@ -183,17 +148,25 @@ void SyclSolver::jacobi(queue& queue, SyclGridData& grid, std::size_t levelNum, 
 
         queue.submit([&](handler& cgh) {
             auto vAcc = level.v.get_access<access::mode::read_write>(cgh);
+            auto newtonvAcc = level.newtonV.get_access<access::mode::read>(cgh);
             auto rAcc = level.r.get_access<access::mode::read>(cgh);
 
-            cgh.parallel_for<class jacobiK>(range<1>(level.v.flatSize()), [=, omega=grid.omega, gamma=grid.gamma, isLinear=grid.isLinear](id<1> idx) {
+            cgh.parallel_for<class jacobiK>(range<1>(level.v.flatSize()), [=, omega=grid.omega, gamma=grid.gamma, mode=grid.mode](id<1> idx) {
                 double1 vVal = vAcc[idx[0]];
 
                 double1 newV;
-                if (isLinear) {
+                if (mode == GridParams::LINEAR) {
                     newV = vVal + omega * (alpha * rAcc[idx[0]]);
-                }else {
+                }else if(mode == GridParams::NONLINEAR) {
                     double1 ex = cl::sycl::exp(vVal);
                     double1 denuminator = preFac + gamma * (1 + vVal) * ex;
+
+                    newV = vVal + omega * (rAcc[idx[0]] / denuminator);
+                }else {
+                    // Newton
+                    double1 newtonV = newtonvAcc[idx[0]];
+                    double1 ex = cl::sycl::exp(newtonV);
+                    double1 denuminator = preFac + gamma * (1 + newtonV) * ex;
 
                     newV = vVal + omega * (rAcc[idx[0]] / denuminator);
                 }
@@ -214,9 +187,10 @@ void SyclSolver::compResidual(queue& queue, SyclGridData& grid, std::size_t leve
 
         auto fAcc = level.f.get_access<access::mode::read>(cgh);
         auto vAcc = level.v.get_access<access::mode::read>(cgh);
+        auto newtonvAcc = level.newtonV.get_access<access::mode::read>(cgh);
         auto rAcc = level.r.get_access<access::mode::write>(cgh);
 
-        cgh.parallel_for<class residual>(range, [=, h=level.h, gamma=grid.gamma, isLinear=grid.isLinear, dims=level.v.getDims(), stencil=grid.stencil](id<3> index) {
+        cgh.parallel_for<class residual>(range, [=, h=level.h, gamma=grid.gamma, mode=grid.mode, dims=level.v.getDims(), stencil=grid.stencil](id<3> index) {
             double1 stencilsum = 0.0;
             for (std::size_t i = 0; i < stencil.values.size(); i++) {
                 const int1 flatIdx = Sycl3dAccesor::flatIndex(dims, index[0] + (stencil.getXOffset(i) + 1), index[1] + (stencil.getYOffset(i) + 1), index[2] + (stencil.getZOffset(i) + 1));
@@ -227,7 +201,13 @@ void SyclSolver::compResidual(queue& queue, SyclGridData& grid, std::size_t leve
             int1 centerIdx = Sycl3dAccesor::shift1Index(dims, index);
             stencilsum /= h * h;
 
-            if (!isLinear) {
+            if (mode == GridParams::NEWTON) {
+                double1 newtonV = newtonvAcc[centerIdx];
+                double1 ex = cl::sycl::exp(newtonV);
+                double1 nonLinear = gamma * (1 + newtonV) * vAcc[centerIdx] * ex;
+                stencilsum += nonLinear;
+            }
+            else if (mode == GridParams::NONLINEAR) {
                 // See tutorial_multigrid.pdf, page 102, Formula 6.13
                 double1 vVal = vAcc[centerIdx];
                 double1 ex = cl::sycl::exp(vVal);
@@ -243,6 +223,7 @@ void SyclSolver::compResidual(queue& queue, SyclGridData& grid, std::size_t leve
 // save result in 'r'. Only needed for non-linear
 void SyclSolver::applyStencil(cl::sycl::queue& queue, SyclGridData& grid, std::size_t levelNum, SyclBuffer& v)
 {
+    assert(grid.mode == GridParams::NONLINEAR);
     SyclGridData::LevelData& level = grid.getLevel(levelNum);
     assert(level.v.flatSize() == v.flatSize());
     SyclBuffer& result = level.r;

@@ -9,6 +9,7 @@ void NewtonSolver::solve(CpuGridData& grid) {
 	grid.mode = GridParams::Mode::NONLINEAR;
 	double initialResidual = CpuSolver::compResidual(grid, 0);
 	std::cout << "Inital residual: " << initialResidual << '\n';
+	grid.mode = GridParams::Mode::NEWTON;
 
 	// Stores the original right hand side, never gets changed
 	grid.newtonF = grid.getLevel(0).f;

@@ -2,11 +2,14 @@
 #include <filesystem>
 #include <fstream>
 #include "gridParams.h"
-#include "cpu/CpuGridData.h"
-#include "cpu/CpuSolver.h"
-#include "cpu/NewtonSolver.h"
 #ifndef GPUSOLVE_CPU
-#include "sycl/SyclSolver.h"
+    #include "sycl/ContextHandles.h"
+    #include "sycl/SyclSolver.h"
+    #include "sycl/NewtonSolver.h"
+#else
+    #include "cpu/CpuGridData.h"
+    #include "cpu/CpuSolver.h"
+    #include "cpu/NewtonSolver.h"
 #endif
 
 int main(int argc, char* argv[]) {
@@ -67,19 +70,26 @@ int main(int argc, char* argv[]) {
         gridParams.h = 1.0 / (gridParams.gridDim[1] + 1);
     }
 
-    if (gridParams.mode == GridParams::Mode::NEWTON) {
-        CpuGridData cpuGridData(gridParams);
-        NewtonSolver::solve(cpuGridData);
-    }
-    else {
+
 #ifdef GPUSOLVE_CPU
-        CpuGridData cpuGridData(gridParams);
+    CpuGridData cpuGridData(gridParams);
+    if (gridParams.mode == GridParams::Mode::NEWTON) {
+        NewtonSolver::solve(cpuGridData);
+    }else {
         CpuSolver::solve(cpuGridData);
-#else
-        SyclGridData syclGridData(gridParams);
-        SyclSolver::solve(syclGridData);
-#endif
     }
+#else
+    ContextHandles contextHandles = ContextHandles::init();
+    SyclGridData syclGridData(gridParams);
+    syclGridData.initBuffers(contextHandles.queue);
+
+    if (gridParams.mode == GridParams::Mode::NEWTON) {
+        NewtonSolver::solve(contextHandles, syclGridData);
+    }else {
+        SyclSolver::solve(contextHandles, syclGridData);
+    }
+
+#endif
 
     return 0;
 }

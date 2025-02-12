@@ -12,6 +12,7 @@ public:
 	struct LevelData {
 		SyclBuffer v;
 		SyclBuffer restV;
+		SyclBuffer newtonV;
 		SyclBuffer f;
 		SyclBuffer r;
 		SyclBuffer e;
@@ -36,6 +37,8 @@ public:
 	{
 		return levels.size();
 	}
+
+	SyclBuffer newtonF;
 
 private:
 	std::vector<LevelData> levels; // levels[0] is the finest level and levels[-1] is the coarsed level

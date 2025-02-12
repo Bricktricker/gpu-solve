@@ -12,7 +12,7 @@ namespace {
 }
 
 SyclGridData::SyclGridData(const GridParams& grid)
-	: GridParams(grid)
+	: GridParams(grid), newtonF(gridDim[0] + 2, gridDim[1] + 2, gridDim[2] + 2)
 {
 	// magic 2.0 at the end is the coarsening ratio
 	int maxlevel = (int)floor(log((double)std::min(std::min(gridDim[0], gridDim[1]), gridDim[2])) / log(2.0)) + 1;
@@ -36,6 +36,7 @@ SyclGridData::SyclGridData(const GridParams& grid)
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
+			SyclBuffer(levelDim[0] + 2, levelDim[1] + 2, levelDim[2] + 2),
 			levelDim,
 			h
 		});
@@ -49,7 +50,7 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 		auto wAccessor = levels[0].f.get_access<cl::sycl::access::mode::discard_write>(cgh);
 		cl::sycl::range<3> range(levels[0].levelDim[0] + 2, levels[0].levelDim[1] + 2, levels[0].levelDim[2] + 2);
 
-		if (this->isLinear) {
+		if (this->mode == GridParams::LINEAR) {
 			const auto xRightSide = levels[0].levelDim[0] + 1;
 			const auto yRightSide = levels[0].levelDim[1] + 1;
 			const auto zRightSide = levels[0].levelDim[2] + 1;
@@ -87,6 +88,15 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 				int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
 				wAccessor[flatIndex] = val;
 			});
+
+			if (mode == GridParams::NEWTON) {
+				// Store the original right hand side in newtonF, never gets changed
+				auto newtonfAcc = newtonF.get_access<cl::sycl::access::mode::discard_write>(cgh);
+				auto fAcc = levels[0].f.get_access<cl::sycl::access::mode::read>(cgh);
+				cgh.parallel_for<class init_newton>(newtonF.getRange(), [newtonfAcc, fAcc](cl::sycl::id<3> index) {
+					newtonfAcc[index] = fAcc[index];
+				});
+			}
 		}
 	});
 
@@ -107,11 +117,13 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 		queue.submit([&](cl::sycl::handler& cgh) {
 			auto vAcc = level.v.get_access<cl::sycl::access::mode::discard_write>(cgh);
 			auto restvAcc = level.restV.get_access<cl::sycl::access::mode::discard_write>(cgh);
+			auto newtonvAcc = level.newtonV.get_access<cl::sycl::access::mode::discard_write>(cgh);
 			auto rAcc = level.r.get_access<cl::sycl::access::mode::discard_write>(cgh);
 			auto eAcc = level.e.get_access<cl::sycl::access::mode::discard_write>(cgh);
-			cgh.parallel_for<class clearAll>(cl::sycl::range<1>(level.v.flatSize()), [vAcc, restvAcc, rAcc, eAcc](cl::sycl::id<1> index) {
+			cgh.parallel_for<class clearAll>(cl::sycl::range<1>(level.v.flatSize()), [vAcc, restvAcc, newtonvAcc, rAcc, eAcc](cl::sycl::id<1> index) {
 				vAcc[index] = 0.0;
 				restvAcc[index] = 0.0;
+				newtonvAcc[index] = 0.0;
 				rAcc[index] = 0.0;
 				eAcc[index] = 0.0;
 			});
