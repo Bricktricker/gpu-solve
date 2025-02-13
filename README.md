@@ -22,7 +22,7 @@ The config file describes the problem structure, an example can be found at [exa
 3. X dimension of the grid
 4. Y dimension of the grid
 5. Z dimension of the grid
-6. Switch between linear (1) and non-linear (0) problem
+6. Switch between linear (0), non-linear (1) and Newton (2) problem
 7. Number of pre-smoothing steps
 8. Number of post-smoothing steps
 9. Relaxation coefficient

@@ -26,6 +26,12 @@ struct Stencil {
 };
 
 struct GridParams {
+    enum Mode {
+        LINEAR,
+        NONLINEAR,
+        NEWTON
+    };
+
     std::size_t maxiter;
     double tol;
     double omega; // Relaxation coefficient
@@ -35,5 +41,7 @@ struct GridParams {
     std::size_t preSmoothing;
     std::size_t postSmoothing;
     Stencil stencil{};
-    bool isLinear;
+    Mode mode;
+
+    bool printProgress = true;
 };

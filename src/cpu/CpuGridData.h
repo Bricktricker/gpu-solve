@@ -9,6 +9,7 @@ public:
     struct LevelData {
         Vector3 v; // left side, target
         Vector3 restV; // restricted v from previous level
+        Vector3 newtonV; // v from the newton step
         Vector3 f; // right hand side
         Vector3 r; // latest residual
         Vector3 e; // error
@@ -31,6 +32,8 @@ public:
     {
         return levels.size();
     }
+
+    Vector3 newtonF;
 
 private:
     std::vector<LevelData> levels; // levels[0] is the finest level and levels[-1] is the coarsed level

@@ -31,6 +31,7 @@ CpuGridData::CpuGridData(const GridParams& grid)
 
 		level.v = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
 		level.restV = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
+		level.newtonV = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
 		level.f = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
 		level.r = Vector3(level.levelDim[0] + 2, level.levelDim[1] + 2, level.levelDim[2] + 2);
 		if (i + 1 != maxlevel) {
@@ -41,7 +42,7 @@ CpuGridData::CpuGridData(const GridParams& grid)
 	}
 
 	// fill right hand side for the first level
-	if (this->isLinear) {
+	if (this->mode == GridParams::LINEAR) {
 
 		for (int i = 0; i < levels[0].levelDim[0]; i++) {
 			for (int j = 0; j < levels[0].levelDim[1]; j++) {

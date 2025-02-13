@@ -2,10 +2,14 @@
 #include <filesystem>
 #include <fstream>
 #include "gridParams.h"
-#include "cpu/CpuGridData.h"
-#include "cpu/CpuSolver.h"
 #ifndef GPUSOLVE_CPU
-#include "sycl/SyclSolver.h"
+    #include "sycl/ContextHandles.h"
+    #include "sycl/SyclSolver.h"
+    #include "sycl/NewtonSolver.h"
+#else
+    #include "cpu/CpuGridData.h"
+    #include "cpu/CpuSolver.h"
+    #include "cpu/NewtonSolver.h"
 #endif
 
 int main(int argc, char* argv[]) {
@@ -32,7 +36,11 @@ int main(int argc, char* argv[]) {
         configFile >> gridParams.gridDim[0];
         configFile >> gridParams.gridDim[1];
         configFile >> gridParams.gridDim[2];
-        configFile >> gridParams.isLinear;
+
+        int mode;
+        configFile >> mode;
+        gridParams.mode = static_cast<GridParams::Mode>(mode);
+
         configFile >> gridParams.preSmoothing;
         configFile >> gridParams.postSmoothing;
         configFile >> gridParams.omega;
@@ -62,12 +70,25 @@ int main(int argc, char* argv[]) {
         gridParams.h = 1.0 / (gridParams.gridDim[1] + 1);
     }
 
+
 #ifdef GPUSOLVE_CPU
     CpuGridData cpuGridData(gridParams);
-    CpuSolver::solve(cpuGridData);
+    if (gridParams.mode == GridParams::Mode::NEWTON) {
+        NewtonSolver::solve(cpuGridData);
+    }else {
+        CpuSolver::solve(cpuGridData);
+    }
 #else
+    ContextHandles contextHandles = ContextHandles::init();
     SyclGridData syclGridData(gridParams);
-    SyclSolver::solve(syclGridData);
+    syclGridData.initBuffers(contextHandles.queue);
+
+    if (gridParams.mode == GridParams::Mode::NEWTON) {
+        NewtonSolver::solve(contextHandles.queue, syclGridData);
+    }else {
+        SyclSolver::solve(contextHandles.queue, syclGridData);
+    }
+
 #endif
 
     return 0;

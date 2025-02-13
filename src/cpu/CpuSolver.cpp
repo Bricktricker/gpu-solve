@@ -3,21 +3,38 @@
 #include <iostream>
 #include <chrono>
 #include <math.h>
-#include <omp.h>
 #include "../Timer.h"
+#ifdef _WIN32
+	#include <windows.h>
+	#include <psapi.h>
+#endif
 
 void CpuSolver::solve(CpuGridData& grid)
 {
 	// Compute inital residual
-	double initialResidual = compResidual(grid, 0);
-	std::cout << "Inital residual: " << initialResidual << '\n';
+	if (grid.printProgress) {
+		double initialResidual = compResidual(grid, 0);
+		std::cout << "Inital residual: " << initialResidual << '\n';
+	}
 
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
-		Timer::start();
+		if (grid.printProgress) {
+			Timer::start();
+		}
+
 		double res = vcycle(grid);
 
-		std::cout << "iter: " << i << " residual: " << res << ' ';
-		Timer::stop();
+		if (grid.printProgress) {
+			std::cout << "iter: " << i << " residual: " << res << ' ';
+			Timer::stop();
+
+#ifdef _WIN32
+			::PROCESS_MEMORY_COUNTERS pmc = {};
+			if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc))) {
+				std::cout << "Current ram usage: " << pmc.WorkingSetSize << '\n';
+			}
+#endif
+		}
 	}
 }
 
@@ -31,17 +48,19 @@ double CpuSolver::compResidual(CpuGridData& grid, std::size_t levelNum)
 	for (std::int64_t x = 1; x < level.levelDim[0]+1; x++) {
 		for (std::size_t y = 1; y < level.levelDim[1]+1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2]+1; z++) {
-				
+
 				double stencilsum = 0.0;
 				for (std::size_t i = 0; i < grid.stencil.values.size(); i++) {
 					double vVal = level.v.get(x + grid.stencil.getXOffset(i), y + grid.stencil.getYOffset(i), z + grid.stencil.getZOffset(i));
 					stencilsum += grid.stencil.values[i] * vVal;
 				}
-
 				stencilsum /= level.h * level.h;
 
-				if (!grid.isLinear) {
-
+				if (grid.mode == GridParams::NEWTON) {
+					double ex = exp(level.newtonV.get(x, y, z));
+					stencilsum += grid.gamma * (1 + level.newtonV.get(x, y, z)) * level.v.get(x,y,z) * ex;
+				}
+				else if(grid.mode == GridParams::NONLINEAR) {
 					// See tutorial_multigrid.pdf, page 102, Formula 6.13
 					double ex = exp(level.v.get(x, y, z));
 					double nonLinear = grid.gamma * level.v.get(x, y, z) * ex;
@@ -74,7 +93,7 @@ double CpuSolver::vcycle(CpuGridData& grid)
 		// f^2h = r^2h
 		restrict(r, nextLevel.f);
 
-		if (grid.isLinear) {
+		if (grid.mode != GridParams::NONLINEAR) {
 			nextLevel.v.fill(0.0);
 		}else {
 			// See tutorial_multigrid.pdf, page 98, Full Approximation Scheme (FAS)
@@ -95,7 +114,7 @@ double CpuSolver::vcycle(CpuGridData& grid)
 
 	for (std::size_t i = grid.numLevels() - 1; i > 0; i--) {
 		
-		if (!grid.isLinear) {
+		if (grid.mode == GridParams::NONLINEAR) {
 			CpuGridData::LevelData& level = grid.getLevel(i);
 			// compute u^2h = u^2h - v^2h
 			level.v -= level.restV;
@@ -131,12 +150,19 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 				for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
 
 					double newV;
-					if (grid.isLinear) {
+					if (grid.mode == GridParams::LINEAR) {
 						newV = level.v.get(x, y, z) + grid.omega * (alpha * level.r.get(x, y, z));
-					}else {
+					}else if(grid.mode == GridParams::NONLINEAR) {
 						// See tutorial_multigrid.pdf, page 103, Formula 6.14
 						double ex = exp(level.v.get(x, y, z));
 						double denuminator = preFac + grid.gamma * (1 + level.v.get(x, y, z)) * ex;
+
+						newV = level.v.get(x, y, z) + grid.omega * (level.r.get(x, y, z) / denuminator);
+					}
+					else {
+						// Newton
+						double ex = exp(level.newtonV.get(x, y, z));
+						double denuminator = preFac + grid.gamma * (1 + level.newtonV.get(x, y, z)) * ex;
 
 						newV = level.v.get(x, y, z) + grid.omega * (level.r.get(x, y, z) / denuminator);
 					}
@@ -151,6 +177,8 @@ void CpuSolver::jacobi(CpuGridData& grid, std::size_t levelNum, std::size_t maxi
 // Only needed for non-linear code
 void CpuSolver::applyStencil(CpuGridData& grid, std::size_t levelNum, const Vector3& v)
 {
+	assert(grid.mode == GridParams::NONLINEAR);
+
 	CpuGridData::LevelData& level = grid.getLevel(levelNum);
 	assert(level.v.flatSize() == v.flatSize());
 	Vector3& result = level.r;
