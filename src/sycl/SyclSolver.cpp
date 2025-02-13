@@ -4,6 +4,10 @@
 #include <chrono>
 #include <string>
 #include <fstream>
+#ifdef _WIN32
+    #include <windows.h>
+    #include <psapi.h>
+#endif
 
 using namespace cl::sycl;
 
@@ -44,20 +48,35 @@ void dumpGpuBuf(SyclBuffer& buf, const std::string& file)
 }
 #endif
 
-void SyclSolver::solve(ContextHandles& handles, SyclGridData& grid)
+void SyclSolver::solve(cl::sycl::queue& queue, SyclGridData& grid)
 {
-    double resInital = sumResidual(handles.queue, grid, 0);
-    std::cout << "Inital residual: " << resInital << '\n';
-
-    for (std::size_t i = 0; i < grid.maxiter; i++) {
-        Timer::start();
-        double res = vcycle(handles.queue, grid);
-
-        std::cout << "iter: " << i << " residual: " << res << ' ';
-        Timer::stop();
+    if (grid.printProgress) {
+        double resInital = sumResidual(queue, grid, 0);
+        std::cout << "Inital residual: " << resInital << '\n';
     }
 
-    handles.queue.wait_and_throw();
+    for (std::size_t i = 0; i < grid.maxiter; i++) {
+        if (grid.printProgress) {
+            Timer::start();
+        }
+
+        double res = vcycle(queue, grid);
+
+        if (grid.printProgress) {
+            std::cout << "iter: " << i << " residual: " << res << ' ';
+            Timer::stop();
+
+#ifdef _WIN32
+            ::PROCESS_MEMORY_COUNTERS pmc = {};
+            if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc))) {
+                std::cout << "Current ram usage: " << pmc.WorkingSetSize << '\n';
+            }
+#endif
+
+        }
+    }
+
+    queue.wait_and_throw();
 }
 
 double SyclSolver::vcycle(queue& queue, SyclGridData& grid)

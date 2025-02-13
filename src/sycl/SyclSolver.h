@@ -1,10 +1,9 @@
 #pragma once
 #include "SyclGridData.h"
-#include "ContextHandles.h"
 
 class SyclSolver {
 public:
-	static void solve(ContextHandles& handles, SyclGridData& grid);
+	static void solve(cl::sycl::queue& queue, SyclGridData& grid);
 	static double sumResidual(cl::sycl::queue& queue, SyclGridData& grid, std::size_t levelNum);
 	static void restrict(cl::sycl::queue& queue, SyclBuffer& fine, SyclBuffer& coarse);
 

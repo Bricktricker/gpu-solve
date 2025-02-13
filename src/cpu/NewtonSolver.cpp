@@ -2,6 +2,10 @@
 #include "CpuSolver.h"
 #include "../Timer.h"
 #include <iostream>
+#ifdef _WIN32
+	#include <windows.h>
+	#include <psapi.h>
+#endif
 
 void NewtonSolver::solve(CpuGridData& grid) {
 	// Compute inital residual
@@ -33,6 +37,14 @@ void NewtonSolver::solve(CpuGridData& grid) {
 
 		std::cout << "iter: " << i << " residual: " << res << ' ';
 		Timer::stop();
+
+#ifdef _WIN32
+		::PROCESS_MEMORY_COUNTERS pmc = {};
+		if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc))) {
+			std::cout << "Current ram usage: " << pmc.WorkingSetSize << '\n';
+		}
+#endif
+
 	}
 
 	// Result is stored in level_0.newtonV

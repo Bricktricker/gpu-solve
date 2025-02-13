@@ -4,6 +4,10 @@
 #include <chrono>
 #include <math.h>
 #include "../Timer.h"
+#ifdef _WIN32
+	#include <windows.h>
+	#include <psapi.h>
+#endif
 
 void CpuSolver::solve(CpuGridData& grid)
 {
@@ -23,6 +27,13 @@ void CpuSolver::solve(CpuGridData& grid)
 		if (grid.printProgress) {
 			std::cout << "iter: " << i << " residual: " << res << ' ';
 			Timer::stop();
+
+#ifdef _WIN32
+			::PROCESS_MEMORY_COUNTERS pmc = {};
+			if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc))) {
+				std::cout << "Current ram usage: " << pmc.WorkingSetSize << '\n';
+			}
+#endif
 		}
 	}
 }

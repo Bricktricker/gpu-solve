@@ -84,9 +84,9 @@ int main(int argc, char* argv[]) {
     syclGridData.initBuffers(contextHandles.queue);
 
     if (gridParams.mode == GridParams::Mode::NEWTON) {
-        NewtonSolver::solve(contextHandles, syclGridData);
+        NewtonSolver::solve(contextHandles.queue, syclGridData);
     }else {
-        SyclSolver::solve(contextHandles, syclGridData);
+        SyclSolver::solve(contextHandles.queue, syclGridData);
     }
 
 #endif
