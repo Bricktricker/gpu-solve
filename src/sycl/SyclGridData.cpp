@@ -88,17 +88,19 @@ void SyclGridData::initBuffers(cl::sycl::queue& queue)
 				int1 flatIndex = Sycl3dAccesor::flatIndex(dims, index);
 				wAccessor[flatIndex] = val;
 			});
-
-			if (mode == GridParams::NEWTON) {
-				// Store the original right hand side in newtonF, never gets changed
-				auto newtonfAcc = newtonF.get_access<cl::sycl::access::mode::discard_write>(cgh);
-				auto fAcc = levels[0].f.get_access<cl::sycl::access::mode::read>(cgh);
-				cgh.parallel_for<class init_newton>(newtonF.getRange(), [newtonfAcc, fAcc](cl::sycl::id<3> index) {
-					newtonfAcc[index] = fAcc[index];
-				});
-			}
 		}
 	});
+
+	if (mode == GridParams::NEWTON) {
+		queue.submit([&](cl::sycl::handler& cgh) {
+			// Store the original right hand side in newtonF, never gets changed
+			auto newtonfAcc = newtonF.get_access<cl::sycl::access::mode::discard_write>(cgh);
+			auto fAcc = levels[0].f.get_access<cl::sycl::access::mode::read>(cgh);
+			cgh.parallel_for<class init_newton>(cl::sycl::range<1>(newtonF.flatSize()), [newtonfAcc, fAcc](cl::sycl::id<1> index) {
+				newtonfAcc[index] = fAcc[index];
+			});
+		});
+	}
 
 	// Init other buffers to 0
 	// TODO: Do I need to init all buffers? Can't I skip e and r?

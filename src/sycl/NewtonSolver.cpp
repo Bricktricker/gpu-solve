@@ -1,5 +1,6 @@
 #include "NewtonSolver.h"
 #include "SyclSolver.h"
+#include "../Timer.h"
 #include <fstream>
 #ifdef _WIN32
     #include <windows.h>
@@ -7,6 +8,12 @@
 #endif
 
 using namespace cl::sycl;
+
+#ifndef SYCL_GTX
+// Mark Stencil as device copyable
+template<>
+struct sycl::is_device_copyable<Stencil> : std::true_type {};
+#endif
 
 void NewtonSolver::solve(cl::sycl::queue& queue, SyclGridData& grid) {
 	// Compute inital residual
@@ -28,7 +35,7 @@ void NewtonSolver::solve(cl::sycl::queue& queue, SyclGridData& grid) {
         queue.submit([&](handler& cgh) {
             SyclBuffer& v = grid.getLevel(0).v;
             auto vAcc = v.get_access<access::mode::discard_write>(cgh);
-            cgh.parallel_for<class reset>(range<1>(v.flatSize()), [=](id<1> index) {
+            cgh.parallel_for<class resetN>(range<1>(v.flatSize()), [=](id<1> index) {
                 vAcc[index] = 0.0;
             });
         });
@@ -87,7 +94,12 @@ void NewtonSolver::compF(cl::sycl::queue& queue, SyclGridData& grid)
     });
 
     double fnorm = 0.0;
+#ifdef SYCL_GTX
     auto hostAcc = level.f.get_host_access<access::mode::read>();
+#else
+    sycl::host_accessor hostAcc{ level.f.nativeBuffer(), sycl::read_only};
+#endif
+
     for (std::int64_t x = 1; x < level.levelDim[0] + 1; x++) {
         for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
             for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
@@ -118,7 +130,7 @@ void NewtonSolver::findError(cl::sycl::queue& queue, SyclGridData& grid)
         auto newtonvAcc = grid.getLevel(0).newtonV.get_access<access::mode::read_write>(cgh);
         auto vAcc = mgGrid.getLevel(0).v.get_access<access::mode::read>(cgh);
 
-        cgh.parallel_for<class reset>(range<1>(grid.getLevel(0).newtonV.flatSize()), [newtonvAcc, vAcc](id<1> index) {
+        cgh.parallel_for<class sumN>(range<1>(grid.getLevel(0).newtonV.flatSize()), [newtonvAcc, vAcc](id<1> index) {
             newtonvAcc[index] += vAcc[index];
         });
     });

@@ -6,8 +6,9 @@ import os
 
 EXE_PATH = Path("out/build/x64-Release/src/")
 
-MODE_LINEAR = 1
-MODE_NONLINEAR = 0
+MODE_LINEAR = 0
+MODE_NONLINEAR = 1
+MODE_NEWTON = 2
 
 def runExperiment(fullPath, mode, resolution, envChanges):
 
@@ -39,6 +40,7 @@ def runExperiment(fullPath, mode, resolution, envChanges):
   if result.returncode != 0:
     print("eperiment konnte nicht ausgeführt werden")
     print(result.stderr)
+    print(result.stdout)
     return
   
   pattern = re.compile(r"iter: (\d+) residual: ([\d\.e-]+) Took (\d+)ms")
@@ -53,10 +55,16 @@ def runExperiment(fullPath, mode, resolution, envChanges):
     iter = int(line[0])
     residual = float(line[1])
     time = int(line[2])
-
     totalTime += time
 
-  return totalTime / len(matches)
+  ramUsage = []
+  pattern = re.compile(r"Current ram usage: (\d+)\s")
+  matches = pattern.findall(result.stdout)
+  for line in matches:
+    ram = int(line)
+    ramUsage.append(ram / 1024 / 1024)
+
+  return (totalTime / len(matches), ramUsage)
 
 print("\n")
 
@@ -69,7 +77,7 @@ impls = [
   (Path("intel_dpc/out.exe"), dpcConfig)
 ]
 
-modes = [MODE_LINEAR, MODE_NONLINEAR]
+modes = [MODE_LINEAR, MODE_NONLINEAR, MODE_NEWTON]
 
 resolutions = [63, 127, 255]
 
@@ -93,11 +101,19 @@ for (exeTuple, mode, resolution) in itertools.product(impls, modes, resolutions)
     envs = [envs]
     printEnv = False
 
-  modeStr = "NON LINEAR" if mode == 0 else "LINEAR"
+  modeStr = ""
+  if mode == MODE_LINEAR:
+    modeStr = "LINEAR"
+  elif mode == MODE_NONLINEAR:
+    modeStr = "NON LINEAR"
+  else:
+    modeStr = "NEWTON"
 
   for env in envs:
-    avgRun = runExperiment(exe, mode, resolution, env)
+    avgRun, ramUsage = runExperiment(exe, mode, resolution, env)
     if printEnv:
       print(f"{exe.name} in mode {modeStr} with env {env} and {resolution} points: {avgRun}ms")
     else:
       print(f"{exe.name} in mode {modeStr} and {resolution} points: {avgRun}ms")
+    for ram in ramUsage:
+      print(f"\tRAM usage: {ram:.2f}MiB")

@@ -79,14 +79,19 @@ int main(int argc, char* argv[]) {
         CpuSolver::solve(cpuGridData);
     }
 #else
-    ContextHandles contextHandles = ContextHandles::init();
-    SyclGridData syclGridData(gridParams);
-    syclGridData.initBuffers(contextHandles.queue);
+    try {
+        ContextHandles contextHandles = ContextHandles::init();
+        SyclGridData syclGridData(gridParams);
+        syclGridData.initBuffers(contextHandles.queue);
 
-    if (gridParams.mode == GridParams::Mode::NEWTON) {
-        NewtonSolver::solve(contextHandles.queue, syclGridData);
-    }else {
-        SyclSolver::solve(contextHandles.queue, syclGridData);
+        if (gridParams.mode == GridParams::Mode::NEWTON) {
+            NewtonSolver::solve(contextHandles.queue, syclGridData);
+        }else {
+            SyclSolver::solve(contextHandles.queue, syclGridData);
+        }
+    }
+    catch (std::exception& e) {
+        std::cerr << "Exception: " << e.what() << '\n';
     }
 
 #endif

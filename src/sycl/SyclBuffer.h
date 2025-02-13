@@ -96,6 +96,16 @@ public:
 		return dims;
 	}
 
+	cl::sycl::buffer<double, 1>& nativeBuffer()
+	{
+		return buffer;
+	}
+
+	const cl::sycl::buffer<double, 1>& nativeBuffer() const
+	{
+		return buffer;
+	}
+
 private:
 	cl::sycl::buffer<double, 1> buffer;
 	BufferDim dims;
