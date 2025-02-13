@@ -58,7 +58,7 @@ void NewtonSolver::compF(CpuGridData& grid)
 
 	double Fnorm = 0.0;
 
-//#pragma omp parallel for schedule(static,8)
+#pragma omp parallel for schedule(static,8) reduction(+:Fnorm)
 	for (std::int64_t x = 1; x < level.levelDim[0]+1; x++) {
 		for (std::size_t y = 1; y < level.levelDim[1]+1; y++) {
 			for (std::size_t z = 1; z < level.levelDim[2]+1; z++) {
@@ -89,20 +89,19 @@ void NewtonSolver::compF(CpuGridData& grid)
 
 void NewtonSolver::findError(CpuGridData& grid)
 {
-	CpuGridData mgGrid = grid; // make a copy for MultiGrid;
-	mgGrid.printProgress = false;
-
 	// Solve f = J(v)*e, where f is the residual r, computed from the current newtonV and the original right hand side
 
 	// restrict newtonV to all levels
 	for (std::size_t i = 1; i < grid.numLevels() - 1; i++) {
-		const Vector3& src = mgGrid.getLevel(i - 1).newtonV;
-		Vector3& dst = mgGrid.getLevel(i).newtonV;
+		const Vector3& src = grid.getLevel(i - 1).newtonV;
+		Vector3& dst = grid.getLevel(i).newtonV;
 		CpuSolver::restrict(src, dst);
 	}
 
-	CpuSolver::solve(mgGrid);
+	grid.printProgress = false;
+	CpuSolver::solve(grid);
+	grid.printProgress = true;
 
 	Vector3& newtonV = grid.getLevel(0).newtonV;
-	newtonV += mgGrid.getLevel(0).v;
+	newtonV += grid.getLevel(0).v;
 }
