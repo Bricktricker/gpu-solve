@@ -92,6 +92,7 @@ for impl in impls:
   print(f"Warmup {exe.name}")
   runExperiment(exe, modes[0], resolutions[0], env)
 
+savedResults = {}
 for (exeTuple, mode, resolution) in itertools.product(impls, modes, resolutions):
   exe = exeTuple[0]
   envs = exeTuple[1]
@@ -115,5 +116,73 @@ for (exeTuple, mode, resolution) in itertools.product(impls, modes, resolutions)
       print(f"{exe.name} in mode {modeStr} with env {env} and {resolution} points: {avgRun}ms")
     else:
       print(f"{exe.name} in mode {modeStr} and {resolution} points: {avgRun}ms")
-    for ram in ramUsage:
-      print(f"\tRAM usage: {ram:.2f}MiB")
+    #for ram in ramUsage:
+    #  print(f"\tRAM usage: {ram:.2f}MiB")
+
+    key = f"{exe.name}_{mode}_{resolution}_{env}"
+    savedResults[key] = {"avgRun": avgRun, "ramUsage": ramUsage}
+
+print("")
+
+# avg time
+for resolution in resolutions:
+  print(f"Results for resolution {resolution}:")
+  for exeTuple in impls:
+    
+    envs = exeTuple[1]
+    if not isinstance(envs, list):
+      envs = [envs]
+
+    for env in envs:
+      outStr = "\\addplot coordinates {"
+      for mode in modes:
+        resultKey = f"{exeTuple[0].name}_{mode}_{resolution}_{env}"
+        result = savedResults[resultKey]
+
+        modeStr = ""
+        if mode == MODE_LINEAR:
+          modeStr = "lin"
+        elif mode == MODE_NONLINEAR:
+          modeStr = "non"
+        else:
+          modeStr = "newton"
+
+        outStr += f"({modeStr},{result['avgRun']}) "
+
+      outStr += "}; %" + exeTuple[0].name + " " + str(env)
+      print(outStr)
+
+print("")
+
+# ram usage
+for resolution in resolutions:
+  for mode in modes:
+
+    modeStr = ""
+    if mode == MODE_LINEAR:
+      modeStr = "lin"
+    elif mode == MODE_NONLINEAR:
+      modeStr = "non"
+    else:
+      modeStr = "newton"
+
+    print(f"RAM usage for resolution {resolution} and problem {modeStr}:")
+    outStr = ""
+    for exeTuple in impls:
+
+      envs = exeTuple[1]
+      if not isinstance(envs, list):
+        envs = [envs]
+
+      for env in envs:
+        resultKey = f"{exeTuple[0].name}_{mode}_{resolution}_{env}"
+        result = savedResults[resultKey]
+
+        outStr += "\\addplot coordinates { "
+        for (i, ram) in enumerate(result['ramUsage']):
+          outStr += f"({i+1},{ram:.2f}) "
+        
+        outStr += "};\n"
+        outStr += "\\addlegendentry{" +exeTuple[0].name + "}; %" + str(env) + "\n"
+
+    print(outStr)
