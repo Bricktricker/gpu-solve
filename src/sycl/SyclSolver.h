@@ -4,7 +4,7 @@
 class SyclSolver {
 public:
 	static void solve(cl::sycl::queue& queue, SyclGridData& grid);
-	static double sumResidual(cl::sycl::queue& queue, SyclGridData& grid, std::size_t levelNum);
+	static double sumBuffer(cl::sycl::queue& queue, SyclBuffer& buffer);
 	static void restrict(cl::sycl::queue& queue, SyclBuffer& fine, SyclBuffer& coarse);
 
 private:

@@ -7,5 +7,5 @@ public:
 
 private:
 	static void findError(CpuGridData& grid);
-	static void compF(CpuGridData& grid);
+	static double compF(CpuGridData& grid);
 };

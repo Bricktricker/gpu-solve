@@ -27,13 +27,17 @@ void CpuSolver::solve(CpuGridData& grid)
 		if (grid.printProgress) {
 			std::cout << "iter: " << i << " residual: " << res << ' ';
 			Timer::stop();
+		}
 
 #ifdef _WIN32
-			::PROCESS_MEMORY_COUNTERS pmc = {};
-			if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc))) {
-				std::cout << "Current ram usage: " << pmc.WorkingSetSize << '\n';
-			}
+		::PROCESS_MEMORY_COUNTERS pmc = {};
+		if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc))) {
+			std::cout << "Current ram usage: " << pmc.WorkingSetSize << '\n';
+		}
 #endif
+
+		if (res <= grid.tol) {
+			return;
 		}
 	}
 }

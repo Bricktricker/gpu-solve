@@ -51,7 +51,8 @@ void dumpGpuBuf(SyclBuffer& buf, const std::string& file)
 void SyclSolver::solve(cl::sycl::queue& queue, SyclGridData& grid)
 {
     if (grid.printProgress) {
-        double resInital = sumResidual(queue, grid, 0);
+        compResidual(queue, grid, 0);
+        double resInital = sumBuffer(queue, grid.getLevel(0).r);
         std::cout << "Inital residual: " << resInital << '\n';
     }
 
@@ -65,18 +66,20 @@ void SyclSolver::solve(cl::sycl::queue& queue, SyclGridData& grid)
         if (grid.printProgress) {
             std::cout << "iter: " << i << " residual: " << res << ' ';
             Timer::stop();
+        }
 
 #ifdef _WIN32
-            ::PROCESS_MEMORY_COUNTERS pmc = {};
-            if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc))) {
-                std::cout << "Current ram usage: " << pmc.WorkingSetSize << '\n';
-            }
+        ::PROCESS_MEMORY_COUNTERS pmc = {};
+        if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc))) {
+            std::cout << "Current ram usage: " << pmc.WorkingSetSize << '\n';
+        }
 #endif
 
+        if (res <= grid.tol) {
+            return;
         }
     }
 
-    queue.wait_and_throw();
 }
 
 double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
@@ -152,7 +155,8 @@ double SyclSolver::vcycle(queue& queue, SyclGridData& grid)
         jacobi(queue, grid, i - 1, grid.postSmoothing);
     }
 
-    double res = sumResidual(queue, grid, 0);
+    compResidual(queue, grid, 0);
+    double res = sumBuffer(queue, grid.getLevel(0).r);
     return res;
 }
 
@@ -277,18 +281,16 @@ void SyclSolver::applyStencil(cl::sycl::queue& queue, SyclGridData& grid, std::s
     });
 }
 
-double SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t levelNum)
+double SyclSolver::sumBuffer(queue& queue, SyclBuffer& buffer)
 {
     // https://www.intel.com/content/www/us/en/docs/oneapi/optimization-guide-gpu/2023-0/reduction.html
-    
-    SyclGridData::LevelData& level = grid.getLevel(levelNum);
 
-    std::size_t flatSize = level.r.flatSize();
+    std::size_t flatSize = buffer.flatSize();
 
     std::size_t num_work_items = 1;
     bool skipFirst; // If the flat size is odd, we skip the first value in the buffer during the sum reduction, and copy it later into the accumulation buffer
     if (flatSize % 2 != 0) {
-        assert(level.r.flatSize() % 2 != 0); // flat size is odd
+        assert(buffer.flatSize() % 2 != 0); // flat size is odd
         // Ignore the first element, so we get an even number of items in the buffer
         flatSize--;
 
@@ -312,36 +314,25 @@ double SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t lev
     }
 
 
-    buffer<double> accumBuf(num_work_items);
-
-    compResidual(queue, grid, levelNum);
-
-    queue.submit([&](handler& cgh) {
-
-        // write needed for initalization
-        auto accR = level.r.get_access<access::mode::read_write>(cgh);
-
-        // square residual first
-        cgh.parallel_for<class sqare>(range<1>(level.r.flatSize()), [=](id<1> index) {
-            double1 val = accR[index];
-            accR[index] = val * val;
-        });
-
-    });
+    cl::sycl::buffer<double> accumBuf(num_work_items);
 
     queue.submit([&](handler& cgh) {
         auto accumAcc = accumBuf.get_access<access::mode::discard_write>(cgh);
-        auto accR = level.r.get_access<access::mode::read>(cgh);
+        auto accR = buffer.get_access<access::mode::read>(cgh);
 
         cgh.parallel_for<class sumK>(range<1>(num_work_items), [=](id<1> index) {
             double1 sum = 0;
             SYCL_FOR(int1 i = index[0], i < flatSize, i) { // can't used i += num_work_items here, breaks kernel generation
                 // Don't use SYCL_IF, we can decide that while building the kernel
                 if (skipFirst) {
-                    sum += accR[i + 1];
+                    double1 val = accR[i + 1];
+                    val = val * val;
+                    sum += val;
                 }
                 else {
-                    sum += accR[i];
+                    double1 val = accR[i];
+                    val = val * val;
+                    sum += val;
                 }
 
                 i += num_work_items;
@@ -355,10 +346,12 @@ double SyclSolver::sumResidual(queue& queue, SyclGridData& grid, std::size_t lev
     if (skipFirst) {
         queue.submit([&](handler& cgh) {
             auto accumAcc = accumBuf.get_access<access::mode::read_write>(cgh);
-            auto accR = level.r.get_access<access::mode::read>(cgh);
+            auto accR = buffer.get_access<access::mode::read>(cgh);
 
             cgh.single_task<class first>([=]() {
-                accumAcc[0] += accR[0];
+                double1 val = accR[0];
+                val = val * val;
+                accumAcc[0] += val;
             });
         });
     }

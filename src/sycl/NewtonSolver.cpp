@@ -16,21 +16,16 @@ struct sycl::is_device_copyable<Stencil> : std::true_type {};
 #endif
 
 void NewtonSolver::solve(cl::sycl::queue& queue, SyclGridData& grid) {
+    // newtonF already filled at this point
+ 
 	// Compute inital residual
-
-	grid.mode = GridParams::Mode::NONLINEAR;
-	double initialResidual = SyclSolver::sumResidual(queue, grid, 0);
+    double initialResidual = compF(queue, grid);
 	std::cout << "Inital newton residual: " << initialResidual << '\n';
-    grid.mode = GridParams::Mode::NEWTON;
-
-	// newtonF already filled at this point
-    compF(queue, grid);
 
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
 		Timer::start();
 
-        findError(queue, grid);
-
+        compF(queue, grid);
         // clear v
         queue.submit([&](handler& cgh) {
             SyclBuffer& v = grid.getLevel(0).v;
@@ -39,10 +34,10 @@ void NewtonSolver::solve(cl::sycl::queue& queue, SyclGridData& grid) {
                 vAcc[index] = 0.0;
             });
         });
-        compF(queue, grid);
-        grid.mode = GridParams::Mode::NONLINEAR;
-        double res = SyclSolver::sumResidual(queue, grid, 0);
-        grid.mode = GridParams::Mode::NEWTON;
+
+        findError(queue, grid);
+
+        double res = compF(queue, grid);
 
         std::cout << "Newton iter: " << i << " residual: " << res << ' ';
 		Timer::stop();
@@ -54,11 +49,15 @@ void NewtonSolver::solve(cl::sycl::queue& queue, SyclGridData& grid) {
         }
 #endif
 
+        if (res <= grid.tol) {
+            return;
+        }
+
 	}
 
 }
 
-void NewtonSolver::compF(cl::sycl::queue& queue, SyclGridData& grid)
+double NewtonSolver::compF(cl::sycl::queue& queue, SyclGridData& grid)
 {
     SyclGridData::LevelData& level = grid.getLevel(0);
 
@@ -93,30 +92,15 @@ void NewtonSolver::compF(cl::sycl::queue& queue, SyclGridData& grid)
         });
     });
 
-    double fnorm = 0.0;
-#ifdef SYCL_GTX
-    auto hostAcc = level.f.get_host_access<access::mode::read>();
-#else
-    sycl::host_accessor hostAcc{ level.f.nativeBuffer(), sycl::read_only};
-#endif
-
-    for (std::int64_t x = 1; x < level.levelDim[0] + 1; x++) {
-        for (std::size_t y = 1; y < level.levelDim[1] + 1; y++) {
-            for (std::size_t z = 1; z < level.levelDim[2] + 1; z++) {
-                const std::size_t idx1 = z * (level.f.getYdim() * level.f.getXdim()) + y * level.f.getXdim() + x;
-                double value = hostAcc[idx1];
-                fnorm += value * value;
-            }
-        }
-    }
-
-    std::cout << "Fnorm: " << fnorm << '\n';
+    return SyclSolver::sumBuffer(queue, level.f);
 }
 
 void NewtonSolver::findError(cl::sycl::queue& queue, SyclGridData& grid)
 {
     SyclGridData mgGrid = grid;
     mgGrid.printProgress = false;
+    mgGrid.maxiter = 4;
+    mgGrid.tol = 10000.0;
 
     for (std::size_t i = 1; i < grid.numLevels() - 1; i++) {
         SyclBuffer& src = mgGrid.getLevel(i - 1).newtonV;

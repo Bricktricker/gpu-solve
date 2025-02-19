@@ -14,7 +14,7 @@ def runExperiment(fullPath, mode, resolution, envChanges):
 
   with open("experiment.conf", "w") as f:
     f.write("10\n") # number of v cycles
-    f.write("0\n") # tolerance, not used
+    f.write("10e-3\n") # tolerance
     # resolution x, y, z
     for _ in range(3):
       f.write(f"{resolution}\n")
@@ -64,7 +64,7 @@ def runExperiment(fullPath, mode, resolution, envChanges):
     ram = int(line)
     ramUsage.append(ram / 1024 / 1024)
 
-  return (totalTime / len(matches), ramUsage)
+  return (totalTime, ramUsage)
 
 print("\n")
 

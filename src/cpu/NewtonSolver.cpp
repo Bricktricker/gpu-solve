@@ -8,15 +8,12 @@
 #endif
 
 void NewtonSolver::solve(CpuGridData& grid) {
-	// Compute inital residual
-
-	grid.mode = GridParams::Mode::NONLINEAR;
-	double initialResidual = CpuSolver::compResidual(grid, 0);
-	std::cout << "Inital residual: " << initialResidual << '\n';
-	grid.mode = GridParams::Mode::NEWTON;
-
 	// Stores the original right hand side, never gets changed
 	grid.newtonF = grid.getLevel(0).f;
+
+	// Compute inital residual
+	double initialResidual = compF(grid);
+	std::cout << "Inital newton residual: " << initialResidual << '\n';
 
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
 		Timer::start();
@@ -26,16 +23,8 @@ void NewtonSolver::solve(CpuGridData& grid) {
 
 		findError(grid);
 
-		// TODO: figure out how to compute the correct residual
-		// fnorm, or this?
-		grid.mode = GridParams::Mode::NONLINEAR;
-		grid.getLevel(0).v.fill(0.0);
-		compF(grid);
-
-		double res = CpuSolver::compResidual(grid, 0);
-		grid.mode = GridParams::Mode::NEWTON;
-
-		std::cout << "iter: " << i << " residual: " << res << ' ';
+		double res = compF(grid);
+		std::cout << "newton iter: " << i << " residual: " << res << ' ';
 		Timer::stop();
 
 #ifdef _WIN32
@@ -45,6 +34,10 @@ void NewtonSolver::solve(CpuGridData& grid) {
 		}
 #endif
 
+		if (res <= grid.tol) {
+			return;
+		}
+
 	}
 
 	// Result is stored in level_0.newtonV
@@ -52,7 +45,7 @@ void NewtonSolver::solve(CpuGridData& grid) {
 
 // computes the residual using newtonV and the original right hand side (newtonF)
 // stores the result in level_0.f
-void NewtonSolver::compF(CpuGridData& grid)
+double NewtonSolver::compF(CpuGridData& grid)
 {
 	CpuGridData::LevelData& level = grid.getLevel(0);
 
@@ -84,7 +77,7 @@ void NewtonSolver::compF(CpuGridData& grid)
 		}
 	}
 
-	std::cout << "Fnorm: " << Fnorm << std::endl;
+	return sqrt(Fnorm);
 }
 
 void NewtonSolver::findError(CpuGridData& grid)
@@ -99,8 +92,16 @@ void NewtonSolver::findError(CpuGridData& grid)
 	}
 
 	grid.printProgress = false;
+	std::size_t origIter = grid.maxiter;
+	double origTol = grid.tol;
+	grid.maxiter = 4;
+	grid.tol = 10000.0;
+
 	CpuSolver::solve(grid);
+
 	grid.printProgress = true;
+	grid.maxiter = origIter;
+	grid.tol = origTol;
 
 	Vector3& newtonV = grid.getLevel(0).newtonV;
 	newtonV += grid.getLevel(0).v;
