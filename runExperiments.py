@@ -128,7 +128,7 @@ for (exeTuple, mode, resolution) in itertools.product(impls, modes, resolutions)
     print(f"sum time: {sumTime}")
 
     key = f"{exe.name}_{mode}_{resolution}_{env}"
-    savedResults[key] = {"avgRun": avgRun, "ramUsage": ramUsage}
+    savedResults[key] = {"avgRun": avgRun, "ramUsage": ramUsage, "sumTime": sumTime}
 
 print("")
 
@@ -194,3 +194,38 @@ for resolution in resolutions:
         outStr += "\\addlegendentry{" +exeTuple[0].name + "}; %" + str(env) + "\n"
 
     print(outStr)
+    
+    
+# rel sum time
+for exeTuple in impls:
+  if "-cpu" in exeTuple[0].name:
+    continue
+  
+  envs = exeTuple[1]
+  if not isinstance(envs, list):
+    envs = [envs]
+    
+  for env in envs:
+    print(f"relative sum time for {exeTuple[0].name} - {str(env)}")
+    for mode in modes:
+      
+      modeStr = ""
+      if mode == MODE_LINEAR:
+        modeStr = "lin"
+      elif mode == MODE_NONLINEAR:
+        modeStr = "non"
+      else:
+        modeStr = "newton"
+      
+      outStr = "\\addplot coordinates {"
+      for resolution in resolutions:
+        resultKey = f"{exeTuple[0].name}_{mode}_{resolution}_{env}"
+        result = savedResults[resultKey]
+        
+        t = (result['sumTime'] / result['avgRun']) * 100
+        outStr += f"({resolution},{t:.2f}) "
+        
+      outStr += "}; % " + modeStr
+      print(outStr)
+    
+    print("")
