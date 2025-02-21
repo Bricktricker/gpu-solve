@@ -285,6 +285,7 @@ void SyclSolver::applyStencil(cl::sycl::queue& queue, SyclGridData& grid, std::s
 double SyclSolver::sumBuffer(queue& queue, SyclBuffer& buffer)
 {
     // https://www.intel.com/content/www/us/en/docs/oneapi/optimization-guide-gpu/2023-0/reduction.html
+    Timer::push("sumBuffer");
 
     std::size_t flatSize = buffer.flatSize();
 
@@ -369,6 +370,7 @@ double SyclSolver::sumBuffer(queue& queue, SyclBuffer& buffer)
         sum += accumAcc[i];
     }
 
+    Timer::pop("sumBuffer");
     return ::sqrt(sum);
 }
 

@@ -19,13 +19,13 @@ void NewtonSolver::solve(cl::sycl::queue& queue, SyclGridData& grid) {
     // newtonF already filled at this point
  
 	// Compute inital residual
-    double initialResidual = compF(queue, grid);
+    double initialResidual = compF(queue, grid, true);
 	std::cout << "Inital newton residual: " << initialResidual << '\n';
 
 	for (std::size_t i = 0; i < grid.maxiter; i++) {
 		Timer::start();
 
-        compF(queue, grid);
+        compF(queue, grid, false);
         // clear v
         queue.submit([&](handler& cgh) {
             SyclBuffer& v = grid.getLevel(0).v;
@@ -37,7 +37,7 @@ void NewtonSolver::solve(cl::sycl::queue& queue, SyclGridData& grid) {
 
         findError(queue, grid);
 
-        double res = compF(queue, grid);
+        double res = compF(queue, grid, true);
 
         std::cout << "Newton iter: " << i << " residual: " << res << ' ';
 		Timer::stop();
@@ -57,7 +57,7 @@ void NewtonSolver::solve(cl::sycl::queue& queue, SyclGridData& grid) {
 
 }
 
-double NewtonSolver::compF(cl::sycl::queue& queue, SyclGridData& grid)
+double NewtonSolver::compF(cl::sycl::queue& queue, SyclGridData& grid, bool calcSum)
 {
     SyclGridData::LevelData& level = grid.getLevel(0);
 
@@ -92,7 +92,11 @@ double NewtonSolver::compF(cl::sycl::queue& queue, SyclGridData& grid)
         });
     });
 
-    return SyclSolver::sumBuffer(queue, level.f);
+    if (calcSum) {
+        return SyclSolver::sumBuffer(queue, level.f);
+    }else {
+        return 0.0;
+    }
 }
 
 void NewtonSolver::findError(cl::sycl::queue& queue, SyclGridData& grid)

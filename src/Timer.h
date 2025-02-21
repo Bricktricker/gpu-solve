@@ -7,6 +7,7 @@ class Timer
 {
 	struct PartialTime {
 		uint64_t timeMs;
+		uint64_t count;
 		std::chrono::high_resolution_clock::time_point lastStart;
 	};
 

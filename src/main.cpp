@@ -41,6 +41,20 @@ int main(int argc, char* argv[]) {
         configFile >> mode;
         gridParams.mode = static_cast<GridParams::Mode>(mode);
 
+        if (gridParams.mode == GridParams::LINEAR) {
+            std::cout << "Solving linear problem\n";
+        }
+        else if (gridParams.mode == GridParams::NONLINEAR) {
+            std::cout << "Solving nonlinear problem\n";
+        }
+        else if (gridParams.mode == GridParams::NEWTON) {
+            std::cout << "Solving newton problem\n";
+        }
+        else {
+            std::cerr << "Invalid mode\n";
+            return 1;
+        }
+
         configFile >> gridParams.preSmoothing;
         configFile >> gridParams.postSmoothing;
         configFile >> gridParams.omega;

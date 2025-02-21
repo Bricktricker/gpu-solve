@@ -63,8 +63,15 @@ def runExperiment(fullPath, mode, resolution, envChanges):
   for line in matches:
     ram = int(line)
     ramUsage.append(ram / 1024 / 1024)
+    
+  totalSumTime = 0
+  pattern = re.compile(r"sumBuffer: (\d+)ms")
+  matches = pattern.findall(result.stdout)
+  for line in matches:
+    sumTime = int(line)
+    totalSumTime += sumTime
 
-  return (totalTime, ramUsage)
+  return (totalTime, ramUsage, totalSumTime)
 
 print("\n")
 
@@ -111,13 +118,14 @@ for (exeTuple, mode, resolution) in itertools.product(impls, modes, resolutions)
     modeStr = "NEWTON"
 
   for env in envs:
-    avgRun, ramUsage = runExperiment(exe, mode, resolution, env)
+    avgRun, ramUsage, sumTime = runExperiment(exe, mode, resolution, env)
     if printEnv:
       print(f"{exe.name} in mode {modeStr} with env {env} and {resolution} points: {avgRun}ms")
     else:
       print(f"{exe.name} in mode {modeStr} and {resolution} points: {avgRun}ms")
     #for ram in ramUsage:
     #  print(f"\tRAM usage: {ram:.2f}MiB")
+    print(f"sum time: {sumTime}")
 
     key = f"{exe.name}_{mode}_{resolution}_{env}"
     savedResults[key] = {"avgRun": avgRun, "ramUsage": ramUsage}
