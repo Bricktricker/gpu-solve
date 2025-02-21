@@ -34,7 +34,7 @@ void NewtonSolver::solve(CpuGridData& grid) {
 		}
 #endif
 
-		if (res <= grid.tol) {
+		if (res <= initialResidual / (1.0 / grid.tol)) {
 			return;
 		}
 
@@ -94,8 +94,8 @@ void NewtonSolver::findError(CpuGridData& grid)
 	grid.printProgress = false;
 	std::size_t origIter = grid.maxiter;
 	double origTol = grid.tol;
-	grid.maxiter = 4;
-	grid.tol = 10000.0;
+	grid.maxiter = 10;
+	grid.tol = 0.1;
 
 	CpuSolver::solve(grid);
 

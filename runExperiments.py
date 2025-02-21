@@ -14,7 +14,7 @@ def runExperiment(fullPath, mode, resolution, envChanges):
 
   with open("experiment.conf", "w") as f:
     f.write("10\n") # number of v cycles
-    f.write("10e-3\n") # tolerance
+    f.write("10e-5\n") # tolerance
     # resolution x, y, z
     for _ in range(3):
       f.write(f"{resolution}\n")

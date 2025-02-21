@@ -12,8 +12,8 @@
 void CpuSolver::solve(CpuGridData& grid)
 {
 	// Compute inital residual
+	double initialResidual = compResidual(grid, 0);
 	if (grid.printProgress) {
-		double initialResidual = compResidual(grid, 0);
 		std::cout << "Inital residual: " << initialResidual << '\n';
 	}
 
@@ -36,7 +36,7 @@ void CpuSolver::solve(CpuGridData& grid)
 		}
 #endif
 
-		if (res <= grid.tol) {
+		if (res <= initialResidual / (1.0 / grid.tol)) {
 			return;
 		}
 	}

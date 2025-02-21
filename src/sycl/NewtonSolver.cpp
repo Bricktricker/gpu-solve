@@ -49,7 +49,7 @@ void NewtonSolver::solve(cl::sycl::queue& queue, SyclGridData& grid) {
         }
 #endif
 
-        if (res <= grid.tol) {
+        if (res <= initialResidual / (1.0 / grid.tol)) {
             return;
         }
 
@@ -99,8 +99,8 @@ void NewtonSolver::findError(cl::sycl::queue& queue, SyclGridData& grid)
 {
     SyclGridData mgGrid = grid;
     mgGrid.printProgress = false;
-    mgGrid.maxiter = 4;
-    mgGrid.tol = 10000.0;
+    mgGrid.maxiter = 10;
+    mgGrid.tol = 0.1;
 
     for (std::size_t i = 1; i < grid.numLevels() - 1; i++) {
         SyclBuffer& src = mgGrid.getLevel(i - 1).newtonV;

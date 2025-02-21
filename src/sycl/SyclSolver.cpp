@@ -50,10 +50,11 @@ void dumpGpuBuf(SyclBuffer& buf, const std::string& file)
 
 void SyclSolver::solve(cl::sycl::queue& queue, SyclGridData& grid)
 {
+    compResidual(queue, grid, 0);
+    double initialResidual = sumBuffer(queue, grid.getLevel(0).r);
+
     if (grid.printProgress) {
-        compResidual(queue, grid, 0);
-        double resInital = sumBuffer(queue, grid.getLevel(0).r);
-        std::cout << "Inital residual: " << resInital << '\n';
+        std::cout << "Inital residual: " << initialResidual << '\n';
     }
 
     for (std::size_t i = 0; i < grid.maxiter; i++) {
@@ -75,7 +76,7 @@ void SyclSolver::solve(cl::sycl::queue& queue, SyclGridData& grid)
         }
 #endif
 
-        if (res <= grid.tol) {
+        if (res <= initialResidual / (1.0 / grid.tol)) {
             return;
         }
     }
